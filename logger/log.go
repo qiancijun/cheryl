@@ -49,6 +49,7 @@ func Error(v ...interface{}) {
 	if LogLevel <= ERROR {
 		ErrorLogger.Println(v...)
 	}
+	os.Exit(1)
 }
 
 func Debugf(format string, v ...interface{}) {
@@ -73,4 +74,5 @@ func Errorf(format string, v ...interface{}) {
 	if LogLevel <= ERROR {
 		ErrorLogger.Printf(format, v...)
 	}
+	os.Exit(1)
 }

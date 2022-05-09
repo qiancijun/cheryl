@@ -1,8 +1,11 @@
 package consistence
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -85,4 +88,21 @@ func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 		fsm: fsm,
 		leaderNotifych: leaderNotify,
 	}, nil
+}
+
+func JoinRaftCluster(conf *config.Config) error {
+	url := fmt.Sprintf("http://%s/join?peerAddress=%s", conf.Raft.LeaderAddress, conf.Raft.RaftTCPAddress)
+	response, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	if string(body) != "ok" {
+		return fmt.Errorf("join cluster fail: %s", err.Error())
+	}
+	return nil
 }

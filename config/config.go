@@ -30,6 +30,7 @@ type Config struct {
 	Location          []*Location `yaml:"location"`
 	Schema            string      `yaml:"schema"`
 	Port              int         `yaml:"port"`
+	HttpPort          int         `yaml:"http_port"`
 	SSLCertificate    string      `yaml:"ssl_certificate"`
 	HealthCheck       bool        `yaml:"tcp_health_check"`
 	LogLevel          string      `yaml:"log_level"`
@@ -45,6 +46,7 @@ type Location struct {
 type RaftConfig struct {
 	DataDir          string `yaml:"data_dir"`
 	RaftTCPAddress   string `yaml:"tcp_address"`
+	LeaderAddress	 string `yaml:"leader_address"`
 	IsLeader         bool   `yaml:"leader"`
 	SnapshotInterval int    `yaml:"snapshot_interval"`
 }

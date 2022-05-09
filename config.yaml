@@ -1,5 +1,6 @@
 schema: http
-port: 9119
+port: 80
+http_port: 9119
 ssl_certificate:
 ssl_certificate_key:
 tcp_health_check: true
