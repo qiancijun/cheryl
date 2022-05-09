@@ -1,12 +1,19 @@
 package main
 
 import (
+	"flag"
 	"log"
+
 	"com.cheryl/cheryl/config"
+	"com.cheryl/cheryl/consistence"
 )
 
 func main() {
-	config, err := config.ReadConfig("config.yaml")
+
+	configPath := flag.String("config", "config.yaml", "config path")
+	flag.Parse()
+
+	config, err := config.ReadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("read config error: %s", err)
 	}
@@ -15,5 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("verify config error: %s", err)
 	}
-	config.StartServer()
+
+	consistence.Start(config)
+	// config.StartServer()
 }

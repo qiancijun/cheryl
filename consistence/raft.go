@@ -13,7 +13,7 @@ import (
 func Start(config *config.Config) {
 	proxyMap := reverseproxy.ProxyMap{
 		Relations: make(map[string]*reverseproxy.HTTPProxy),
-		Router: reverseproxy.GetRouterInstance("default"),
+		Router:    reverseproxy.GetRouterInstance("default"),
 	}
 
 	state := &State{
@@ -25,8 +25,8 @@ func Start(config *config.Config) {
 	}
 
 	// 在本地端口开启 http 监听
-	var httpListen net.Listener = createListener(config.HttpPort)
-	
+	httpListen, err := createListener(config.HttpPort)
+
 	// 创建 http Server
 	httpServer := NewHttpServer(stateContext)
 	state.Hs = httpServer
@@ -39,13 +39,20 @@ func Start(config *config.Config) {
 	if err != nil {
 		logger.Errorf("create new raft node failed: %s", err.Error())
 	}
-	state.Raft = raft
+	state.RaftNode = raft
 	// TODO: 如果是从节点，尝试加入到主节点中
+	if !config.Raft.IsLeader && config.Raft.LeaderAddress != "" {
+		err := JoinRaftCluster(config)
+		if err != nil {
+			logger.Errorf("join raft cluster failed: %s", err.Error())
+		}
+		logger.Infof("join raft cluster success, %s", state.RaftNode.Raft.String())
+	}
 
 	// TODO: 监听 leader
 	for {
 		select {
-		case leader := <- state.Raft.leaderNotifych:
+		case leader := <-state.RaftNode.leaderNotifych:
 			if leader {
 				logger.Debug("becomne leader, enable write api")
 			} else {
@@ -53,14 +60,15 @@ func Start(config *config.Config) {
 			}
 		}
 	}
-	
+
 }
 
-func createListener(port int) net.Listener {
-	httpListen, err := net.Listen("tcp", fmt.Sprintf(":%d",port))
+func createListener(port int) (net.Listener, error) {
+	httpListen, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		logger.Errorf("listen %d failed: %s", port, err.Error())
+		logger.Warnf("listen %d failed: %s", port, err.Error())
+		return nil, err
 	}
 	logger.Infof("http server listen: %s", httpListen.Addr())
-	return httpListen
+	return httpListen, nil
 }

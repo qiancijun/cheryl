@@ -1,15 +1,15 @@
 schema: http
-port: 80
-http_port: 9119
+port: 88
+http_port: 9120
 ssl_certificate:
 ssl_certificate_key:
 tcp_health_check: true
 log_level: debug
 raft:
   data_dir: ./node
-  tcp_address: 127.0.0.1:7000
-  leader: true
-  leader_address: 127.0.0.1:9119
+  tcp_address: 127.0.0.1:6000
+  leader: false
+  leader_address: 127.0.0.1:7000
   snapshot_interval: 3
 location:                         # route matching for reverse proxy
   - pattern: /api
