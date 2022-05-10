@@ -1,3 +1,4 @@
+name: node1
 schema: http
 port: 80
 http_port: 9119
@@ -6,7 +7,7 @@ ssl_certificate_key:
 tcp_health_check: true
 log_level: debug
 raft:
-  data_dir: ./node
+  data_dir: ./data
   tcp_address: 127.0.0.1:7000
   leader: true
   leader_address: 127.0.0.1:9119

@@ -9,5 +9,5 @@ type State struct {
 }
 
 type StateContext struct {
-	Ctx *State
+	State *State
 }

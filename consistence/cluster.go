@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"com.cheryl/cheryl/config"
+	"com.cheryl/cheryl/logger"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
@@ -26,7 +27,7 @@ func newRaftTransport(conf *config.Config) (*raft.NetworkTransport, error) {
 	if err != nil {
 		return nil, err
 	}
-	transport, err := raft.NewTCPTransport(address.String(), address, 3, 10 * time.Second, os.Stderr)
+	transport, err := raft.NewTCPTransport(address.String(), address, 3, 10*time.Second, os.Stderr)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +37,8 @@ func newRaftTransport(conf *config.Config) (*raft.NetworkTransport, error) {
 func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 	raftConfig := raft.DefaultConfig()
 	raftConfig.LocalID = raft.ServerID(conf.Raft.RaftTCPAddress)
-	raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
+	// raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
+	raftConfig.SnapshotInterval = 20 * time.Second
 	raftConfig.SnapshotThreshold = 2
 	leaderNotify := make(chan bool, 1)
 	raftConfig.NotifyCh = leaderNotify
@@ -45,25 +47,27 @@ func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(conf.Raft.DataDir, 0700); err != nil {
+	path := filepath.Join(conf.Raft.DataDir, conf.Name)
+	logger.Debugf("create data dir: %s", path)
+	if err := os.MkdirAll(path, 0700); err != nil {
 		return nil, err
 	}
 
-	fsm := &FSM {
+	fsm := &FSM{
 		ctx: ctx,
 		log: log.New(os.Stdout, "FSM: ", log.Ldate|log.Ltime),
 	}
-	snapshotStore, err := raft.NewFileSnapshotStore(conf.Raft.DataDir, 1, os.Stderr)
+	snapshotStore, err := raft.NewFileSnapshotStore(path, 1, os.Stderr)
 	if err != nil {
 		return nil, err
 	}
 
-	logStore, err := raftboltdb.NewBoltStore(filepath.Join(conf.Raft.DataDir, "raft-log.bolt"))
+	logStore, err := raftboltdb.NewBoltStore(filepath.Join(path, "raft-log.bolt"))
 	if err != nil {
 		return nil, err
 	}
 
-	stableStore, err := raftboltdb.NewBoltStore(filepath.Join(conf.Raft.DataDir, "raft-stable.bolt"))
+	stableStore, err := raftboltdb.NewBoltStore(filepath.Join(path, "raft-stable.bolt"))
 	if err != nil {
 		return nil, err
 	}
@@ -73,10 +77,10 @@ func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 		return nil, err
 	}
 	if conf.Raft.IsLeader {
-		configuration := raft.Configuration {
+		configuration := raft.Configuration{
 			Servers: []raft.Server{
 				{
-					ID: raftConfig.LocalID,
+					ID:      raftConfig.LocalID,
 					Address: transport.LocalAddr(),
 				},
 			},
@@ -84,8 +88,8 @@ func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 		raftNode.BootstrapCluster(configuration)
 	}
 	return &raftNodeInfo{
-		Raft: raftNode,
-		fsm: fsm,
+		Raft:           raftNode,
+		fsm:            fsm,
 		leaderNotifych: leaderNotify,
 	}, nil
 }
@@ -101,6 +105,7 @@ func JoinRaftCluster(conf *config.Config) error {
 	if err != nil {
 		return err
 	}
+	logger.Debug(string(body))
 	if string(body) != "ok" {
 		return fmt.Errorf("join cluster fail: %s", err.Error())
 	}

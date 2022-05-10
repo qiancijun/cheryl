@@ -26,6 +26,7 @@ var (
 )
 
 type Config struct {
+	Name              string      `yaml:"name"`
 	SSLCertificateKey string      `yaml:"ssl_certificate_key"`
 	Location          []*Location `yaml:"location"`
 	Schema            string      `yaml:"schema"`
@@ -46,7 +47,7 @@ type Location struct {
 type RaftConfig struct {
 	DataDir          string `yaml:"data_dir"`
 	RaftTCPAddress   string `yaml:"tcp_address"`
-	LeaderAddress	 string `yaml:"leader_address"`
+	LeaderAddress    string `yaml:"leader_address"`
 	IsLeader         bool   `yaml:"leader"`
 	SnapshotInterval int    `yaml:"snapshot_interval"`
 }

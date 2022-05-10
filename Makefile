@@ -1,2 +1,2 @@
 server:
-	go run config.go main.go
+	go run main.go
