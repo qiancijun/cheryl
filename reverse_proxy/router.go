@@ -11,6 +11,7 @@ type Router interface {
 	Remove(string)
 	HasPerfix(string) bool
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
+	SetRateLimiter(*HTTPProxy, LimiterInfo) error
 	route(w http.ResponseWriter, r *http.Request)
 	configRate(*HTTPProxy, string) error
 }

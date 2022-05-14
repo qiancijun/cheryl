@@ -38,10 +38,13 @@ func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 	raftConfig := raft.DefaultConfig()
 	raftConfig.LocalID = raft.ServerID(conf.Raft.RaftTCPAddress)
 	// raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
-	raftConfig.SnapshotInterval = 20 * time.Second
+	raftConfig.SnapshotInterval = 10 * time.Second
 	raftConfig.SnapshotThreshold = 2
 	leaderNotify := make(chan bool, 1)
 	raftConfig.NotifyCh = leaderNotify
+	raftConfig.Logger = nil
+	raftConfig.HeartbeatTimeout = 5 * time.Second
+	raftConfig.ElectionTimeout = 5 * time.Second
 
 	transport, err := newRaftTransport(conf)
 	if err != nil {

@@ -1,12 +1,14 @@
 package consistence
 
 import (
+	"com.cheryl/cheryl/config"
 	reverseproxy "com.cheryl/cheryl/reverse_proxy"
 	"github.com/hashicorp/raft"
 )
 
 type snapshot struct {
 	proxyMap *reverseproxy.ProxyMap
+	Locations map[string]*config.Location
 }
 
 func (s *snapshot) Persist(sink raft.SnapshotSink) error {

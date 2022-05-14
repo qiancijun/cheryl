@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"com.cheryl/cheryl/balancer"
+	"com.cheryl/cheryl/config"
 	rateLimit "com.cheryl/cheryl/rate_limit"
 	"com.cheryl/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
@@ -27,18 +28,34 @@ const (
 * 	alive: 反向代理的主机是否处于健康状态
  */
 type HTTPProxy struct {
-	hostMap map[string]*httputil.ReverseProxy
-	pattern string
-	lb      balancer.Balancer
-	alive   map[string]bool
-	methods map[string]rateLimit.RateLimiter
+	HostMap  map[string]*httputil.ReverseProxy
+	Pattern  string
+	Lb       balancer.Balancer
+	Alive    map[string]bool
+	Methods  map[string]rateLimit.RateLimiter
+	ProxyMap *ProxyMap
 	sync.RWMutex
 }
 
 type ProxyMap struct {
 	sync.RWMutex
-	Relations map[string]*HTTPProxy
-	Router    Router
+	Relations map[string]*HTTPProxy `json:"-"`
+	Locations map[string]*config.Location
+	Router    Router `json:"-"`
+	Limiters  map[string][]LimiterInfo
+	Infos     Info
+}
+
+type Info struct {
+	RouterType string
+}
+
+type LimiterInfo struct {
+	PathName    string `json:"pathName"`
+	LimiterType string `json:"limiterType"`
+	Volumn      int    `json:"volumn"`    //容量
+	Speed       int64  `json:"speed"`     // 速率
+	MaxThread   int    `json:"maxThread"` // 最大并发数量
 }
 
 // 对每一个 URL 创建反向代理并且记录到 URL 树中
@@ -76,16 +93,16 @@ func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm)
 	}
 
 	return &HTTPProxy{
-		hostMap: hostMap,
-		lb:      lb,
-		alive:   alive,
-		pattern: pattern,
-		methods: methods,
+		HostMap: hostMap,
+		Lb:      lb,
+		Alive:   alive,
+		Pattern: pattern,
+		Methods: methods,
 	}, nil
 }
 
 func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	host, err := h.lb.Balance(utils.GetIP(r.RemoteAddr))
+	host, err := h.Lb.Balance(utils.GetIP(r.RemoteAddr))
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		errMsg := fmt.Sprintf("balancer error: %s", err.Error())
@@ -93,11 +110,10 @@ func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.lb.Inc(host)
-	defer h.lb.Done(host)
-	h.hostMap[host].ServeHTTP(w, r)
+	h.Lb.Inc(host)
+	defer h.Lb.Done(host)
+	h.HostMap[host].ServeHTTP(w, r)
 }
-
 
 func (proxyMap *ProxyMap) Marshal() ([]byte, error) {
 	proxyMap.RLock()

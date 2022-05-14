@@ -14,7 +14,7 @@ import (
 // 使用哈希记录路由前缀
 type DefaultRouter struct {
 	sync.RWMutex
-	hosts     map[string]*HTTPProxy
+	hosts map[string]*HTTPProxy
 }
 
 func (r *DefaultRouter) Add(p string, proxy *HTTPProxy) {
@@ -56,9 +56,23 @@ func (r *DefaultRouter) route(w http.ResponseWriter, req *http.Request) {
 			// 找到了最长匹配的前缀路由，负载均衡转发请求
 			if r.HasPerfix(nextPath) {
 				httpProxy = r.hosts[nextPath]
+				host, err := httpProxy.Lb.Balance(utils.GetIP(req.RemoteAddr))
+				logger.Debugf("debug: DefaultRouter has found the longest path: %s, ready redirect to the host: %s", nextPath, host)
+				if err != nil {
+					w.WriteHeader(http.StatusBadGateway)
+					errMsg := fmt.Sprintf("balancer error: %s", err.Error())
+					w.Write([]byte(errMsg))
+					return
+				}
+				httpProxy.Lb.Inc(host)
+				defer httpProxy.Lb.Done(host)
+
+				// 将前缀覆盖重写
+				path = path[i:]
+				logger.Debugf("rewrite the path: %s", path)
 
 				// 在进行路由转发之前，尝试从代理器中获取限流器，获取 Token 后再转发
-				err := r.invaildToken(httpProxy, nextPath)
+				err = r.invaildToken(httpProxy, path)
 				if err != nil {
 					errMsg := fmt.Sprintf("route error: %s", err.Error())
 					logger.Debug(errMsg)
@@ -67,33 +81,20 @@ func (r *DefaultRouter) route(w http.ResponseWriter, req *http.Request) {
 					return
 				}
 
-				host, err := httpProxy.lb.Balance(utils.GetIP(req.RemoteAddr))
-				logger.Debugf("debug: DefaultRouter has found the longest path: %s, ready redirect to the host: %s", nextPath, host)
-				if err != nil {
-					w.WriteHeader(http.StatusBadGateway)
-					errMsg := fmt.Sprintf("balancer error: %s", err.Error())
-					w.Write([]byte(errMsg))
-					return
-				}
-				httpProxy.lb.Inc(host)
-				defer httpProxy.lb.Done(host)
-
-				// 将前缀覆盖重写
-				path = path[i:]
-				logger.Debugf("rewrite the path: %s", path)
 				req.URL.Path = path
-				httpProxy.hostMap[host].ServeHTTP(w, req)
+				httpProxy.HostMap[host].ServeHTTP(w, req)
 				break
 			}
 		}
 	}
 	if i < 0 {
 		// 没有找到匹配的路由，返回404
+		logger.Debugf("can't find any path can accord with: %s", path)
 		http.NotFound(w, req)
 		return
 	}
 
-	err := r.configRate(httpProxy, nextPath)
+	err := r.configRate(httpProxy, path)
 	if err == ratelimit.LimiterAlreadyExists {
 		return
 	}
@@ -101,7 +102,7 @@ func (r *DefaultRouter) route(w http.ResponseWriter, req *http.Request) {
 		logger.Error(err)
 		return
 	} else {
-		logger.Debugf("create a new rateLimiter for path %s", nextPath)
+		logger.Debugf("create a new rateLimiter for path %s%s", nextPath, path)
 	}
 }
 
@@ -111,7 +112,7 @@ func (r *DefaultRouter) configRate(httpProxy *HTTPProxy, path string) error {
 		errMsg := "default_router can't find the httpProxy"
 		return errors.New(errMsg)
 	}
-	methods := httpProxy.methods
+	methods := httpProxy.Methods
 	_, has := methods[path]
 	if !has {
 		r.Lock()
@@ -123,6 +124,17 @@ func (r *DefaultRouter) configRate(httpProxy *HTTPProxy, path string) error {
 			return errors.New(errMsg)
 		}
 		methods[path] = limiter
+		// 在 ProxyMap 中记录
+		proxyMap := httpProxy.ProxyMap
+		limiters := proxyMap.Limiters
+		limiters[httpProxy.Pattern] = append(limiters[httpProxy.Pattern], LimiterInfo{
+			PathName:    path,
+			LimiterType: "qps",
+			Volumn:      -1,
+			Speed:       0,
+			MaxThread:   -1,
+		})
+
 	} else {
 		return ratelimit.LimiterAlreadyExists
 	}
@@ -130,12 +142,13 @@ func (r *DefaultRouter) configRate(httpProxy *HTTPProxy, path string) error {
 }
 
 func (r *DefaultRouter) invaildToken(proxy *HTTPProxy, api string) error {
-	methods := proxy.methods
+	methods := proxy.Methods
 	limiter := methods[api]
 	// 还未配置限流器，经过第一次访问之后，默认创建一个 qps 限流器
 	if limiter == nil {
 		return nil
 	}
+	logger.Debugf("{invaildToken} method: %s 's limiter info: volumn: %d speed: %d", api, limiter.GetVolumn(), limiter.GetVolumn())
 	timeout := limiter.GetTimeout()
 
 	var err error
@@ -145,4 +158,29 @@ func (r *DefaultRouter) invaildToken(proxy *HTTPProxy, api string) error {
 		err = limiter.TakeWithTimeout(timeout)
 	}
 	return err
+}
+
+func (r *DefaultRouter) SetRateLimiter(httpProxy *HTTPProxy, info LimiterInfo) error {
+	methods := httpProxy.Methods
+	r.Lock()
+	defer r.Unlock()
+	switch info.LimiterType {
+	case "qps":
+		limiter, err := ratelimit.Build("qps")
+		if err != nil {
+			errMsg := "can't find qps limiter"
+			return errors.New(errMsg)
+		}
+		limiter.SetRate(info.Volumn, info.Speed)
+		methods[info.PathName] = limiter
+	case "concurrent":
+
+	default:
+		return ratelimit.LimiterTypeNotSupportedError
+	}
+	// 在 ProxyMap 中记录
+	proxyMap := httpProxy.ProxyMap
+	limiters := proxyMap.Limiters
+	limiters[httpProxy.Pattern] = append(limiters[httpProxy.Pattern], info)
+	return nil
 }

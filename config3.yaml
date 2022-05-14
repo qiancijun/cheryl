@@ -1,0 +1,22 @@
+name: node3
+schema: http
+port: 90
+http_port: 9121
+ssl_certificate:
+ssl_certificate_key:
+tcp_health_check: true
+log_level: debug
+raft:
+  data_dir: ./data
+  tcp_address: 127.0.0.1:5000
+  leader: false
+  leader_address: 127.0.0.1:9119
+  snapshot_interval: 3
+location:                         # route matching for reverse proxy
+  - pattern: /api
+    proxy_pass:                   # URL of the reverse proxy
+    - "http://localhost:8080"
+    # - "http://192.168.1.2:1015"
+    # - "https://192.168.1.2"
+    # - "http://my-server.com"
+    balance_mode: round-robin     # load balancing algorithm

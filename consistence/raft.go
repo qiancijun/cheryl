@@ -4,33 +4,47 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"com.cheryl/cheryl/balancer"
 	"com.cheryl/cheryl/config"
 	"com.cheryl/cheryl/logger"
 	reverseproxy "com.cheryl/cheryl/reverse_proxy"
+	"com.cheryl/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
 )
 
-func Start(config *config.Config) {
+var (
+	LeaderCheckTimeout = 10 * time.Second
+)
+
+func Start(conf *config.Config) {
+	// TODO: 类型封装
 	proxyMap := reverseproxy.ProxyMap{
 		Relations: make(map[string]*reverseproxy.HTTPProxy),
 		Router:    reverseproxy.GetRouterInstance("default"),
+		Locations: make(map[string]*config.Location),
+		Infos:     reverseproxy.Info{
+			RouterType: "default",
+		},
+		Limiters: make(map[string][]reverseproxy.LimiterInfo),
 	}
 
 	state := &State{
-		ProxyMap: proxyMap,
+		ProxyMap: &proxyMap,
 	}
 
 	stateContext := &StateContext{
 		State: state,
 	}
 
+	init, _ := utils.PathExist(filepath.Join(conf.Raft.DataDir, conf.Name))
+
 	// 在本地端口开启 http 监听
-	httpListen, err := createListener(config.HttpPort)
+	httpListen, err := createListener(conf.HttpPort)
 	if err != nil {
-		logger.Errorf("listen %s failed", config.HttpPort)
+		logger.Errorf("listen %s failed", conf.HttpPort)
 	}
 
 	// 创建 http Server
@@ -41,36 +55,40 @@ func Start(config *config.Config) {
 	}()
 
 	// 创建 raft 节点
-	raft, err := Make(config, stateContext)
+	raft, err := Make(conf, stateContext)
 	if err != nil {
 		logger.Errorf("create new raft node failed: %s", err.Error())
 	}
 	state.RaftNode = raft
-	// TODO: 如果是从节点，尝试加入到主节点中
-	if !config.Raft.IsLeader && config.Raft.LeaderAddress != "" {
-		err := JoinRaftCluster(config)
+	// 如果是从节点，尝试加入到主节点中
+	if !conf.Raft.IsLeader && conf.Raft.LeaderAddress != "" {
+		err := JoinRaftCluster(conf)
 		if err != nil {
 			logger.Errorf("join raft cluster failed: %s", err.Error())
 		}
 		logger.Infof("join raft cluster success, %s", state.RaftNode.Raft.String())
 	}
 
-	// TODO: 监听 leader
+	// 监听 leader
 	go func() {
 		for {
 			select {
 			case leader := <-state.RaftNode.leaderNotifych:
-				if leader {
-					logger.Debug("becomne leader, enable write api")
+				if leader && conf.Raft.IsLeader {
+					if !init {
+						logger.Debugf("the node %s is first time start, ready create Proxy from config", conf.Name)
+						createProxy(stateContext, conf)
+					}
+					httpServer.SetWriteFlag(true)
+					logger.Debug("become leader, enable write api")
 				} else {
-					logger.Debug("becomne leader, disable write api")
+					logger.Debug("become follower, disable write api")
+					httpServer.SetWriteFlag(true)
 				}
 			}
 		}
 	}()
-
-	startProxy(stateContext, config)
-
+	startRouter(stateContext, conf)
 }
 
 func createListener(port int) (net.Listener, error) {
@@ -83,27 +101,37 @@ func createListener(port int) (net.Listener, error) {
 	return httpListen, nil
 }
 
-func startProxy(ctx *StateContext, conf *config.Config) {
-	r := http.NewServeMux()
-	// TODO: 根据配置更换路由器类型
-	router := reverseproxy.GetRouterInstance("default")
+func createProxy(ctx *StateContext, conf *config.Config) {
+	logger.Debugf("{createProxy} %s will createProxy", conf.Name)
 	for _, l := range conf.Location {
-		httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
-		if err != nil {
-			logger.Errorf("create proxy error: %s", err)
-		}
-		router.Add(l.Pattern, httpProxy)
-		if conf.HealthCheck {
-			httpProxy.HealthCheck()
-		}
-		// 写入 LogEntry
-		writeLogEntry(ctx, 1, l.Pattern, l)
-		// r.Handle(l.Pattern, httpProxy)
+		createProxyWithLocation(ctx, l)
 	}
-	r.Handle("/", router)
+}
 
-	svr := http.Server {
-		Addr: fmt.Sprintf(":%d", conf.Port),
+func createProxyWithLocation(ctx *StateContext, l *config.Location) {
+	router := ctx.State.ProxyMap.Router
+	httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
+	if err != nil {
+		logger.Errorf("create proxy error: %s", err)
+	}
+	httpProxy.ProxyMap = ctx.State.ProxyMap
+	// 添加映射关系
+	ctx.State.ProxyMap.Relations[l.Pattern] = httpProxy
+	ctx.State.ProxyMap.Locations[l.Pattern] = l
+	router.Add(l.Pattern, httpProxy)
+	httpProxy.HealthCheck()
+	err = ctx.writeLogEntry(1, l.Pattern, make(map[string]string, 0), *l, reverseproxy.LimiterInfo{})
+	if err != nil {
+		logger.Warnf("{createProxyWithLocation} write logEntry failed: %s", err.Error())
+	}
+}
+
+func startRouter(ctx *StateContext, conf *config.Config) {
+	r := http.NewServeMux()
+	router := ctx.State.ProxyMap.Router
+	r.Handle("/", router)
+	svr := http.Server{
+		Addr:    fmt.Sprintf(":%d", conf.Port),
 		Handler: r,
 	}
 	if conf.Schema == "http" {
@@ -117,17 +145,21 @@ func startProxy(ctx *StateContext, conf *config.Config) {
 	}
 }
 
-func writeLogEntry(ctx *StateContext, opt int, key string, value interface{}) error {
-	event := LogEntryData{opt, key, value}
+func (ctx *StateContext) writeLogEntry(opt int, key string, value map[string]string, location config.Location, limiterInfo reverseproxy.LimiterInfo) error {
+	event := LogEntryData{opt, key, value, location, limiterInfo}
+	logger.Debugf("{writeLogEntry} the new event: %s %v", key, value)
 	eventBytes, err := jsoniter.Marshal(event)
 	if err != nil {
-		logger.Warnf("json marshal failed: %s", err.Error())
+		logger.Warnf("{writeLogEntry} json marshal failed: %s", err.Error())
 		return err
 	}
-	applyFuture := ctx.State.RaftNode.Raft.Apply(eventBytes, 5 * time.Second)
+	logger.Debugf("{writeLogEntry} marshal log success %s", string(eventBytes))
+	applyFuture := ctx.State.RaftNode.Raft.Apply(eventBytes, 5*time.Second)
 	if err := applyFuture.Error(); err != nil {
 		logger.Warnf("raft apply failed: %s", err.Error())
 		return err
 	}
+	idx := applyFuture.Index()
+	logger.Debugf("the new raft index: %d", idx)
 	return nil
 }
