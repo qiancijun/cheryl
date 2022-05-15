@@ -71,20 +71,17 @@ func Start(conf *config.Config) {
 
 	// 监听 leader
 	go func() {
-		for {
-			select {
-			case leader := <-state.RaftNode.leaderNotifych:
-				if leader && conf.Raft.IsLeader {
-					if !init {
-						logger.Debugf("the node %s is first time start, ready create Proxy from config", conf.Name)
-						createProxy(stateContext, conf)
-					}
-					httpServer.SetWriteFlag(true)
-					logger.Debug("become leader, enable write api")
-				} else {
-					logger.Debug("become follower, disable write api")
-					httpServer.SetWriteFlag(true)
+		for leader := range state.RaftNode.leaderNotifych {
+			if leader && conf.Raft.IsLeader {
+				if !init {
+					logger.Debugf("the node %s is first time start, ready create Proxy from config", conf.Name)
+					createProxy(stateContext, conf)
 				}
+				httpServer.SetWriteFlag(true)
+				logger.Debug("become leader, enable write api")
+			} else {
+				logger.Debug("become follower, disable write api")
+				httpServer.SetWriteFlag(true)
 			}
 		}
 	}()
@@ -109,16 +106,12 @@ func createProxy(ctx *StateContext, conf *config.Config) {
 }
 
 func createProxyWithLocation(ctx *StateContext, l *config.Location) {
-	router := ctx.State.ProxyMap.Router
 	httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
 	if err != nil {
 		logger.Errorf("create proxy error: %s", err)
 	}
 	httpProxy.ProxyMap = ctx.State.ProxyMap
-	// 添加映射关系
-	ctx.State.ProxyMap.Relations[l.Pattern] = httpProxy
-	ctx.State.ProxyMap.Locations[l.Pattern] = l
-	router.Add(l.Pattern, httpProxy)
+	ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
 	httpProxy.HealthCheck()
 	err = ctx.writeLogEntry(1, l.Pattern, make(map[string]string, 0), *l, reverseproxy.LimiterInfo{})
 	if err != nil {

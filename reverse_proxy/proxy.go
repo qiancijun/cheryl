@@ -11,6 +11,7 @@ import (
 
 	"com.cheryl/cheryl/balancer"
 	"com.cheryl/cheryl/config"
+	"com.cheryl/cheryl/logger"
 	rateLimit "com.cheryl/cheryl/rate_limit"
 	"com.cheryl/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
@@ -131,4 +132,18 @@ func (proxyMap *ProxyMap) UnMarshal(serialized io.ReadCloser) error {
 	defer proxyMap.Unlock()
 	proxyMap = &newData
 	return nil
+}
+
+func (proxyMap *ProxyMap) AddRelations(pattern string, proxy *HTTPProxy, location *config.Location) {
+	if _, has := proxyMap.Relations[pattern]; !has {
+		logger.Warnf("can't find reverse proxy, the prefix is %s", pattern)
+		return
+	}
+	if _, has := proxyMap.Locations[pattern]; !has {
+		logger.Warnf("can't find relation, the prefix is %s", pattern)
+		return
+	}
+	proxyMap.Relations[pattern] = proxy
+	proxy.ProxyMap.Locations[pattern] = location
+	proxyMap.Router.Add(pattern, proxy)
 }

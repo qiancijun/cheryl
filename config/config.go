@@ -96,46 +96,6 @@ func (c *Config) Validation() error {
 	return nil
 }
 
-// func (c *Config) StartServer() {
-// 	r := http.NewServeMux()
-
-// 	router := reverseproxy.GetRouterInstance("default")
-// 	hasStaticRouter := false
-// 	for _, l := range c.Location {
-// 		if l.Pattern == "/" {
-// 			hasStaticRouter = true
-// 		}
-// 		httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
-// 		router.Add(l.Pattern, httpProxy)
-// 		if err != nil {
-// 			log.Fatalf("create proxy error: %s", err)
-// 		}
-// 		if c.HealthCheck {
-// 			httpProxy.HealthCheck()
-// 		}
-// 		r.Handle(l.Pattern, httpProxy)
-// 	}
-// 	if !hasStaticRouter {
-// 		// TODO 没有指定默认路由，将接受到的请求做路由匹配处理
-// 		r.Handle("/", router)
-// 	}
-
-// 	svr := http.Server{
-// 		Addr:    ":" + strconv.Itoa(c.Port),
-// 		Handler: r,
-// 	}
-// 	c.Print()
-// 	if c.Schema == "http" {
-// 		if err := svr.ListenAndServe(); err != nil {
-// 			log.Fatalf("listen and serve error: %s", err)
-// 		}
-// 	} else if c.Schema == "https" {
-// 		if err := svr.ListenAndServeTLS(c.SSLCertificate, c.SSLCertificateKey); err != nil {
-// 			log.Fatalf("listen and serve error: %s", err)
-// 		}
-// 	}
-// }
-
 func GetConfig() *Config {
 	return config
 }

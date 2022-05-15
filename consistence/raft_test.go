@@ -25,6 +25,7 @@ func TestRaftNode(t *testing.T) {
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	assert.Equal(t, "pong", string(body))
 }
 
