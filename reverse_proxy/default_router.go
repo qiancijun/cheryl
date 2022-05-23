@@ -29,7 +29,7 @@ func (r *DefaultRouter) Remove(p string) {
 	delete(r.hosts, p)
 }
 
-func (r *DefaultRouter) HasPerfix(p string) bool {
+func (r *DefaultRouter) HasPrefix(p string) bool {
 	r.RLock()
 	defer r.RUnlock()
 	_, has := r.hosts[p]
@@ -54,7 +54,7 @@ func (r *DefaultRouter) route(w http.ResponseWriter, req *http.Request) {
 			nextPath = path[:i]
 			logger.Debugf("debug: %s try to catch path", nextPath)
 			// 找到了最长匹配的前缀路由，负载均衡转发请求
-			if r.HasPerfix(nextPath) {
+			if r.HasPrefix(nextPath) {
 				httpProxy = r.hosts[nextPath]
 				host, err := httpProxy.Lb.Balance(utils.GetIP(req.RemoteAddr))
 				logger.Debugf("debug: DefaultRouter has found the longest path: %s, ready redirect to the host: %s", nextPath, host)
@@ -161,6 +161,7 @@ func (r *DefaultRouter) invaildToken(proxy *HTTPProxy, api string) error {
 }
 
 func (r *DefaultRouter) SetRateLimiter(httpProxy *HTTPProxy, info LimiterInfo) error {
+	logger.Debugf("{SetRateLimiter} pathName: %s limiterType: %s volumn: %d speed: %d maxThread: %d", info.PathName, info.LimiterType, info.Volumn, info.Speed, info.MaxThread)
 	methods := httpProxy.Methods
 	r.Lock()
 	defer r.Unlock()
@@ -171,7 +172,9 @@ func (r *DefaultRouter) SetRateLimiter(httpProxy *HTTPProxy, info LimiterInfo) e
 			errMsg := "can't find qps limiter"
 			return errors.New(errMsg)
 		}
-		limiter.SetRate(info.Volumn, info.Speed)
+		if info.Speed != 0 {
+			limiter.SetRate(info.Volumn, info.Speed)
+		}
 		methods[info.PathName] = limiter
 	case "concurrent":
 

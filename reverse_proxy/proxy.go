@@ -11,7 +11,6 @@ import (
 
 	"com.cheryl/cheryl/balancer"
 	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/logger"
 	rateLimit "com.cheryl/cheryl/rate_limit"
 	"com.cheryl/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
@@ -41,7 +40,7 @@ type HTTPProxy struct {
 type ProxyMap struct {
 	sync.RWMutex
 	Relations map[string]*HTTPProxy `json:"-"`
-	Locations map[string]*config.Location
+	Locations map[string]config.Location
 	Router    Router `json:"-"`
 	Limiters  map[string][]LimiterInfo
 	Infos     Info
@@ -124,26 +123,26 @@ func (proxyMap *ProxyMap) Marshal() ([]byte, error) {
 }
 
 func (proxyMap *ProxyMap) UnMarshal(serialized io.ReadCloser) error {
-	var newData ProxyMap
-	if err := jsoniter.NewDecoder(serialized).Decode(&newData); err != nil {
+	if err := jsoniter.NewDecoder(serialized).Decode(&proxyMap); err != nil {
 		return err
 	}
-	proxyMap.Lock()
-	defer proxyMap.Unlock()
-	proxyMap = &newData
 	return nil
 }
 
-func (proxyMap *ProxyMap) AddRelations(pattern string, proxy *HTTPProxy, location *config.Location) {
-	if _, has := proxyMap.Relations[pattern]; !has {
-		logger.Warnf("can't find reverse proxy, the prefix is %s", pattern)
-		return
-	}
-	if _, has := proxyMap.Locations[pattern]; !has {
-		logger.Warnf("can't find relation, the prefix is %s", pattern)
-		return
-	}
+func (proxyMap *ProxyMap) AddRelations(pattern string, proxy *HTTPProxy, location config.Location) {
+	proxy.ProxyMap = proxyMap
+	// if _, has := proxyMap.Relations[pattern]; !has {
+	// 	proxyMap.Relations[pattern] = proxy
+	// 	logger.Warnf("can't find reverse proxy, the prefix is %s", pattern)
+	// 	return
+	// }
+	// if _, has := proxyMap.Locations[pattern]; !has {
+	// 	proxy.ProxyMap.Locations[pattern] = location
+	// 	logger.Warnf("can't find relation, the prefix is %s", pattern)
+	// 	return
+	// }
 	proxyMap.Relations[pattern] = proxy
 	proxy.ProxyMap.Locations[pattern] = location
 	proxyMap.Router.Add(pattern, proxy)
+	proxy.HealthCheck()
 }

@@ -42,6 +42,7 @@ func NewHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/methods", s.doGetMethods)
 	mux.HandleFunc("/limiter", s.doSetRateLimiter)
 	mux.HandleFunc("/peers", s.doGetRaftClusterInfo)
+	mux.HandleFunc("/info", s.doGetInfo)
 	return s
 }
 
@@ -196,14 +197,28 @@ func (h *HttpServer) doGetRaftClusterInfo(w http.ResponseWriter, r *http.Request
 		}
 		res = append(res, r)
 	}
-	// data, err := jsoniter.Marshal(res)
-	// if err != nil {
-	// 	errMsg := fmt.Sprintf("can't marshal raft cluster peers: %s", err.Error())
-	// 	logger.Warn(errMsg)
-	// 	w.Write(Error(500, errMsg).Marshal())
-	// 	return
-	// }
 	w.Write(Ok().Put("data", res).Marshal())
+}
+
+func (h *HttpServer) doGetInfo(w http.ResponseWriter, r *http.Request) {
+	type Response struct {
+		Name        string `json:"name"`
+		RaftAddress string `json:"raftAddress"`
+		IsLeader    bool   `json:"isLeader"`
+		ProxyPort   int    `json:"proxyPort"`
+	}
+	conf := config.GetConfig()
+	name := conf.Name
+	address := conf.Raft.RaftTCPAddress
+	leader := h.Ctx.State.RaftNode.Raft.Leader()
+	preoxyPort := conf.Port
+	res := Response{
+		Name:        name,
+		RaftAddress: address,
+		IsLeader:    address == string(leader),
+		ProxyPort:   preoxyPort,
+	}
+	w.Write(Ok().Put("info", res).Marshal())
 }
 
 func (h *HttpServer) checkWritePermission() bool {

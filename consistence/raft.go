@@ -24,7 +24,7 @@ func Start(conf *config.Config) {
 	proxyMap := reverseproxy.ProxyMap{
 		Relations: make(map[string]*reverseproxy.HTTPProxy),
 		Router:    reverseproxy.GetRouterInstance("default"),
-		Locations: make(map[string]*config.Location),
+		Locations: make(map[string]config.Location),
 		Infos:     reverseproxy.Info{
 			RouterType: "default",
 		},
@@ -105,15 +105,14 @@ func createProxy(ctx *StateContext, conf *config.Config) {
 	}
 }
 
-func createProxyWithLocation(ctx *StateContext, l *config.Location) {
+func createProxyWithLocation(ctx *StateContext, l config.Location) {
 	httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
 	if err != nil {
 		logger.Errorf("create proxy error: %s", err)
 	}
-	httpProxy.ProxyMap = ctx.State.ProxyMap
 	ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
-	httpProxy.HealthCheck()
-	err = ctx.writeLogEntry(1, l.Pattern, make(map[string]string, 0), *l, reverseproxy.LimiterInfo{})
+	// httpProxy.HealthCheck()
+	err = ctx.writeLogEntry(1, l.Pattern, make(map[string]string, 0), l, reverseproxy.LimiterInfo{})
 	if err != nil {
 		logger.Warnf("{createProxyWithLocation} write logEntry failed: %s", err.Error())
 	}

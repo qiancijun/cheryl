@@ -21,16 +21,16 @@ var (
 )
 
 type Config struct {
-	Name              string      `yaml:"name"`
-	SSLCertificateKey string      `yaml:"ssl_certificate_key"`
-	Location          []*Location `yaml:"location"`
-	Schema            string      `yaml:"schema"`
-	Port              int         `yaml:"port"`
-	HttpPort          int         `yaml:"http_port"`
-	SSLCertificate    string      `yaml:"ssl_certificate"`
-	HealthCheck       bool        `yaml:"tcp_health_check"`
-	LogLevel          string      `yaml:"log_level"`
-	Raft              RaftConfig  `yaml:"raft"`
+	Name              string     `yaml:"name"`
+	SSLCertificateKey string     `yaml:"ssl_certificate_key"`
+	Location          []Location `yaml:"location"`
+	Schema            string     `yaml:"schema"`
+	Port              int        `yaml:"port"`
+	HttpPort          int        `yaml:"http_port"`
+	SSLCertificate    string     `yaml:"ssl_certificate"`
+	HealthCheck       bool       `yaml:"tcp_health_check"`
+	LogLevel          string     `yaml:"log_level"`
+	Raft              RaftConfig `yaml:"raft"`
 }
 
 type Location struct {

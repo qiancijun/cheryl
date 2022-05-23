@@ -61,23 +61,31 @@ func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
 }
 
 func (f *FSM) Restore(serialized io.ReadCloser) error {
+	logger.Debug("found snapshot file, ready to restore")
+	f.ctx.State.ProxyMap.Relations = make(map[string]*reverseproxy.HTTPProxy)
 	err := f.ctx.State.ProxyMap.UnMarshal(serialized)
 	if err != nil {
 		logger.Errorf("can't restore State: %s", err.Error())
 		return err
 	}
-	
+	logger.Debug(f.ctx.State.ProxyMap)
 	router := f.ctx.State.ProxyMap.Router
+	logger.Debugf("{Restore} locations: %s", f.ctx.State.ProxyMap.Locations)
 	for _, l := range f.ctx.State.ProxyMap.Locations {
+		logger.Debugf("{Restore} found location: pattern: %s proxypass: %s balanceMode: %s", l.Pattern, l.ProxyPass, l.BalanceMode)
 		httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
 		if err != nil {
 			logger.Errorf("create proxy error: %s", err)
 			return err
 		}
 		logger.Debugf("{doNewHttpProxy} add new httpProxy %s", l.Pattern)
-		router.Add(l.Pattern, httpProxy)
-		httpProxy.HealthCheck()
+		
+		f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
+		// httpProxy.ProxyMap = f.ctx.State.ProxyMap
+		// router.Add(l.Pattern, httpProxy)
+		// httpProxy.HealthCheck()
 	}
+	logger.Debug(f.ctx.State.ProxyMap.Limiters)
 	for key, limiters := range f.ctx.State.ProxyMap.Limiters {
 		httpProxy, has := f.ctx.State.ProxyMap.Relations[key]
 		if !has { continue }
@@ -103,12 +111,14 @@ func (f *FSM) doNewHttpProxy(logEntry LogEntryData) error {
 		logger.Errorf("create proxy error: %s", err)
 		return err
 	}
-	httpProxy.ProxyMap = f.ctx.State.ProxyMap
-	f.ctx.State.ProxyMap.Relations[l.Pattern] = httpProxy
-	f.ctx.State.ProxyMap.Locations[l.Pattern] = &l
+	f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
+	
 	logger.Debugf("{doNewHttpProxy} add new httpProxy %s", key)
-	f.ctx.State.ProxyMap.Router.Add(key, httpProxy)
-	httpProxy.HealthCheck()
+	// httpProxy.ProxyMap = f.ctx.State.ProxyMap
+	// f.ctx.State.ProxyMap.Relations[l.Pattern] = httpProxy
+	// f.ctx.State.ProxyMap.Locations[l.Pattern] = l
+	// f.ctx.State.ProxyMap.Router.Add(key, httpProxy)
+	// httpProxy.HealthCheck()
 	return nil
 }
 

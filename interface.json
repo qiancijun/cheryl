@@ -1,0 +1,10 @@
+{
+    "prefix": "/api",
+    "limiterInfo": {
+        "pathName": "/hello",
+        "limiterType": "qps",
+        "volumn": 2,
+        "speed": 1,
+        "maxThread": -1
+    }
+}

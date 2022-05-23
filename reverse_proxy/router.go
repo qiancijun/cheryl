@@ -9,7 +9,7 @@ import (
 type Router interface {
 	Add(string, *HTTPProxy)
 	Remove(string)
-	HasPerfix(string) bool
+	HasPrefix(string) bool
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
 	SetRateLimiter(*HTTPProxy, LimiterInfo) error
 	route(w http.ResponseWriter, r *http.Request)
