@@ -1,0 +1,45 @@
+POST http://localhost:9119/limiter HTTP/1.1
+content-type: application/json
+
+{
+    "prefix": "/api",
+    "limiterInfo": {
+        "pathName": "/hello",
+        "limiterType": "qps",
+        "volumn": 2,
+        "speed": 1,
+        "duration": 0,
+        "maxThread": -1
+    }
+};
+###
+POST http://localhost:9119/limiter HTTP/1.1
+content-type: application/json
+
+{
+    "prefix": "/api",
+    "limiterInfo": {
+        "pathName": "/index",
+        "limiterType": "qps",
+        "volumn": 1,
+        "speed": 1,
+        "duration": 500,
+        "maxThread": -1
+    }
+};
+###
+GET http://localhost/api/index
+###
+GET http://localhost:9119/peers
+###
+GET http://localhost:9119/methods
+###
+GET http://localhost:9119/proxy
+###
+POST http://localhost:9119/methodInfo
+Content-Type: application/json
+
+{
+    "pattern": "/api",
+    "method": "/hello"
+}

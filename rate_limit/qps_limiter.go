@@ -63,7 +63,7 @@ func (r *QpsRateLimiter) GetSpeed() int64 {
 func (r *QpsRateLimiter) GetTimeout() time.Duration {
 	r.RLock()
 	defer r.RUnlock()
-	return r.Timeout
+	return time.Duration(r.Timeout.Milliseconds())
 }
 
 func (r *QpsRateLimiter) SetTimeout(time time.Duration) {

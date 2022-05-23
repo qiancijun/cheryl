@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"com.cheryl/cheryl/logger"
 	ratelimit "com.cheryl/cheryl/rate_limit"
@@ -133,6 +134,7 @@ func (r *DefaultRouter) configRate(httpProxy *HTTPProxy, path string) error {
 			Volumn:      -1,
 			Speed:       0,
 			MaxThread:   -1,
+			Duration: 0,
 		})
 
 	} else {
@@ -152,7 +154,7 @@ func (r *DefaultRouter) invaildToken(proxy *HTTPProxy, api string) error {
 	timeout := limiter.GetTimeout()
 
 	var err error
-	if timeout == -1 {
+	if timeout == 0 {
 		err = limiter.Take()
 	} else {
 		err = limiter.TakeWithTimeout(timeout)
@@ -174,6 +176,9 @@ func (r *DefaultRouter) SetRateLimiter(httpProxy *HTTPProxy, info LimiterInfo) e
 		}
 		if info.Speed != 0 {
 			limiter.SetRate(info.Volumn, info.Speed)
+		}
+		if info.Duration != 0 {
+			limiter.SetTimeout(time.Duration(info.Duration) * time.Millisecond)
 		}
 		methods[info.PathName] = limiter
 	case "concurrent":

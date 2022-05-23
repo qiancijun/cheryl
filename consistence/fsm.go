@@ -68,7 +68,7 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 		logger.Errorf("can't restore State: %s", err.Error())
 		return err
 	}
-	logger.Debug(f.ctx.State.ProxyMap)
+
 	router := f.ctx.State.ProxyMap.Router
 	logger.Debugf("{Restore} locations: %s", f.ctx.State.ProxyMap.Locations)
 	for _, l := range f.ctx.State.ProxyMap.Locations {
@@ -81,15 +81,15 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 		logger.Debugf("{doNewHttpProxy} add new httpProxy %s", l.Pattern)
 		
 		f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
-		// httpProxy.ProxyMap = f.ctx.State.ProxyMap
-		// router.Add(l.Pattern, httpProxy)
-		// httpProxy.HealthCheck()
 	}
-	logger.Debug(f.ctx.State.ProxyMap.Limiters)
+
 	for key, limiters := range f.ctx.State.ProxyMap.Limiters {
 		httpProxy, has := f.ctx.State.ProxyMap.Relations[key]
 		if !has { continue }
 		for _, limiter := range limiters {
+			// add methods to ProxyMap, then set rate limiter
+			// logger.Debugf("{Restore} line 91 key: %s", key)
+			// f.ctx.State.ProxyMap.Relations[key].Methods
 			router.SetRateLimiter(httpProxy, limiter)
 		}
 	}

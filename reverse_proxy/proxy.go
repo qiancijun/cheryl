@@ -53,9 +53,10 @@ type Info struct {
 type LimiterInfo struct {
 	PathName    string `json:"pathName"`
 	LimiterType string `json:"limiterType"`
-	Volumn      int    `json:"volumn"`    //容量
+	Volumn      int    `json:"volumn"`    // 容量
 	Speed       int64  `json:"speed"`     // 速率
 	MaxThread   int    `json:"maxThread"` // 最大并发数量
+	Duration    int    `json:"duration"`  // 超时时间
 }
 
 // 对每一个 URL 创建反向代理并且记录到 URL 树中

@@ -8,6 +8,7 @@ import (
 
 	"com.cheryl/cheryl/config"
 	"com.cheryl/cheryl/logger"
+	ratelimit "com.cheryl/cheryl/rate_limit"
 	reverseproxy "com.cheryl/cheryl/reverse_proxy"
 	"com.cheryl/cheryl/utils"
 	"github.com/hashicorp/raft"
@@ -43,6 +44,8 @@ func NewHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/limiter", s.doSetRateLimiter)
 	mux.HandleFunc("/peers", s.doGetRaftClusterInfo)
 	mux.HandleFunc("/info", s.doGetInfo)
+	mux.HandleFunc("/proxy", s.doGetProxy)
+	mux.HandleFunc("/methodInfo", s.doGetMehtodLimiter)
 	return s
 }
 
@@ -219,6 +222,60 @@ func (h *HttpServer) doGetInfo(w http.ResponseWriter, r *http.Request) {
 		ProxyPort:   preoxyPort,
 	}
 	w.Write(Ok().Put("info", res).Marshal())
+}
+
+func (h *HttpServer) doGetProxy(w http.ResponseWriter, r *http.Request) {
+	res := make(map[string][]string)
+	relations := h.Ctx.State.ProxyMap.Relations
+	for k, v := range relations {
+		hostMap := v.HostMap
+		res[k] = make([]string, 0)
+		for host, _ := range hostMap {
+			res[k] = append(res[k], host)
+		}
+	}
+	w.Write(Ok().Put("data", res).Marshal())
+}
+
+func (h *HttpServer) doGetMehtodLimiter(w http.ResponseWriter, r *http.Request) {
+	type ReqData struct {
+		Pattern string `json:"pattern"`
+		Method  string `json:"method"`
+	}
+	var req ReqData
+	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
+		r.Body.Close()
+		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	limiter := h.Ctx.State.ProxyMap.Relations[req.Pattern].Methods[req.Method]
+	if limiter == nil {
+		w.Write(Error(404, "没有找到该方法").Marshal())
+		return
+	}
+	type Response struct {
+		Type    string        `json:"type"`
+		Speed   int64         `json:"speed"`
+		Volumn  int           `json:"volumn"`
+		Timeout time.Duration `json:"timeout"`
+	}
+	var tp string
+	switch limiter.(type) {
+	case *ratelimit.QpsRateLimiter:
+		tp = "qps"
+	default:
+		tp = "unknown"
+	}
+	res := Response{
+		Type:    tp,
+		Speed:   limiter.GetSpeed(),
+		Volumn:  limiter.GetVolumn(),
+		Timeout: limiter.GetTimeout(),
+	}
+	w.Write(Ok().Put("method", res).Marshal())
 }
 
 func (h *HttpServer) checkWritePermission() bool {
