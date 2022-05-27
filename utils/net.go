@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -41,19 +42,14 @@ func IsBackendAlive(host string) bool {
 	return true
 }
 
-func GetLocalIpAddress() string {
-	addrs, err := net.InterfaceAddrs()
+func GetOutBoundIP()(ip string, err error)  {
+    conn, err := net.Dial("udp", "8.8.8.8:53")
     if err != nil {
         fmt.Println(err)
-        return ""
+        return
     }
-    for _, address := range addrs {
-        // 检查ip地址判断是否回环地址
-        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-            if ipnet.IP.To4() != nil {
-                return ipnet.IP.String()
-            }
-        }
-    }
-	return ""
+    localAddr := conn.LocalAddr().(*net.UDPAddr)
+    fmt.Println(localAddr.String())
+    ip = strings.Split(localAddr.String(), ":")[0]
+    return
 }

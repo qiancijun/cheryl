@@ -12,6 +12,7 @@ import (
 
 	"com.cheryl/cheryl/config"
 	"com.cheryl/cheryl/logger"
+	"com.cheryl/cheryl/utils"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
@@ -36,7 +37,13 @@ func newRaftTransport(conf *config.Config) (*raft.NetworkTransport, error) {
 
 func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 	raftConfig := raft.DefaultConfig()
-	raftConfig.LocalID = raft.ServerID(conf.Raft.RaftTCPAddress)
+	// raftConfig.LocalID = raft.ServerID(conf.Raft.RaftTCPAddress)
+	ip, err := utils.GetOutBoundIP()
+	if err != nil {
+		logger.Warnf("can't get local ip address: %s", err.Error())
+		ip = "0.0.0.0"
+	}
+	raftConfig.LocalID = raft.ServerID(fmt.Sprintf("%s:%d", ip, conf.HttpPort))
 	// raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
 	raftConfig.SnapshotInterval = 10 * time.Second
 	raftConfig.SnapshotThreshold = 2

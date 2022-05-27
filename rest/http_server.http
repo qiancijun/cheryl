@@ -30,6 +30,8 @@ content-type: application/json
 ###
 GET http://localhost/api/index
 ###
+GET http://localhost/api/hello
+###
 GET http://localhost:9119/peers
 ###
 GET http://localhost:9119/methods

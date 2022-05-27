@@ -10,7 +10,6 @@ import (
 	"com.cheryl/cheryl/logger"
 	ratelimit "com.cheryl/cheryl/rate_limit"
 	reverseproxy "com.cheryl/cheryl/reverse_proxy"
-	"com.cheryl/cheryl/utils"
 	"github.com/hashicorp/raft"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -37,7 +36,7 @@ func NewHttpServer(ctx *StateContext) *HttpServer {
 		enableWrite: ENABLE_WRITE_FALSE,
 		address:     make([]string, 0),
 	}
-	s.address = append(s.address, utils.GetLocalIpAddress())
+	// s.address = append(s.address, utils.GetLocalIpAddress())
 	mux.HandleFunc("/ping", s.doPing)
 	mux.HandleFunc("/join", s.doJoin)
 	mux.HandleFunc("/methods", s.doGetMethods)
@@ -46,6 +45,7 @@ func NewHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/info", s.doGetInfo)
 	mux.HandleFunc("/proxy", s.doGetProxy)
 	mux.HandleFunc("/methodInfo", s.doGetMehtodLimiter)
+	mux.HandleFunc("/addProxy", s.doAddProxy)
 	return s
 }
 
@@ -159,6 +159,8 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logger.Debugf("receive limiter info: %s", req)
+
 	err := h.Ctx.State.ProxyMap.Router.SetRateLimiter(httpProxy, req.Info)
 	if err != nil {
 		errMsg := fmt.Sprintf("can't set the %s%s RateLimiter: %s", req.Prefix, req.Info.PathName, err.Error())
@@ -225,13 +227,18 @@ func (h *HttpServer) doGetInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpServer) doGetProxy(w http.ResponseWriter, r *http.Request) {
-	res := make(map[string][]string)
+	type Response struct {
+		Host  string `json:"host"`
+		Alive bool   `json:"alive"`
+	}
+	res := make(map[string][]Response)
 	relations := h.Ctx.State.ProxyMap.Relations
 	for k, v := range relations {
 		hostMap := v.HostMap
-		res[k] = make([]string, 0)
+		alive := v.Alive
+		res[k] = make([]Response, 0)
 		for host, _ := range hostMap {
-			res[k] = append(res[k], host)
+			res[k] = append(res[k], Response{host, alive[host]})
 		}
 	}
 	w.Write(Ok().Put("data", res).Marshal())
@@ -278,6 +285,32 @@ func (h *HttpServer) doGetMehtodLimiter(w http.ResponseWriter, r *http.Request) 
 	w.Write(Ok().Put("method", res).Marshal())
 }
 
+func (h *HttpServer) doAddProxy(w http.ResponseWriter, r *http.Request) {
+	if !h.checkWritePermission() {
+		w.Write(Error(500, "write method not allowed").Marshal())
+		return
+	}
+	var location config.Location
+	if err := jsoniter.NewDecoder(r.Body).Decode(&location); err != nil {
+		r.Body.Close()
+		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	logger.Debug(location)
+	err := validLocation(location)
+	if err != nil {
+		logger.Warn(err.Error())
+		w.Write(Error(500, err.Error()).Marshal())
+		return
+	}
+	createProxyWithLocation(h.Ctx, location)
+	w.Write(Ok().Marshal())
+	return
+}
+
 func (h *HttpServer) checkWritePermission() bool {
 	return atomic.LoadInt32(&h.enableWrite) == ENABLE_WRITE_TRUE
 }
@@ -288,4 +321,17 @@ func (h *HttpServer) SetWriteFlag(flag bool) {
 	} else {
 		atomic.StoreInt32(&h.enableWrite, ENABLE_WRITE_FALSE)
 	}
+}
+
+
+func validLocation(location config.Location) error {
+	pattern := location.Pattern
+	if pattern[0] != '/' {
+		return fmt.Errorf("the pattern must begin with character '/'")
+	}
+	proxyPass := location.ProxyPass
+	if len(proxyPass) == 0 {
+		return fmt.Errorf("can't find any proxy hosts")
+	}
+	return nil
 }

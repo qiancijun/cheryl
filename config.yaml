@@ -5,7 +5,7 @@ http_port: 9119
 ssl_certificate:
 ssl_certificate_key:
 tcp_health_check: true
-log_level: debug
+log_level: info
 raft:
   data_dir: ./data
   tcp_address: 127.0.0.1:7000
