@@ -30,7 +30,7 @@ opt: 操作类型：
 type LogEntryData struct {
 	Opt         int
 	Key         string
-	Value       map[string]string
+	Value       string
 	Location    config.Location
 	LimiterInfo reverseproxy.LimiterInfo
 }
@@ -52,6 +52,8 @@ func (f *FSM) Apply(logEntry *raft.Log) interface{} {
 		ret = f.doNewHttpProxy(e)
 	case 2:
 		ret = f.doSetRateLimiter(e)
+	case 3:
+		ret = f.doHandleAcl(e)
 	}
 	return ret
 }
@@ -88,10 +90,12 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 		if !has { continue }
 		for _, limiter := range limiters {
 			// add methods to ProxyMap, then set rate limiter
-			// logger.Debugf("{Restore} line 91 key: %s", key)
-			// f.ctx.State.ProxyMap.Relations[key].Methods
 			router.SetRateLimiter(httpProxy, limiter)
 		}
+	}
+
+	for key, _ := range f.ctx.State.ProxyMap.Acl.Record {
+		f.ctx.State.ProxyMap.Acl.Add(key, key)
 	}
 	return nil
 }
@@ -114,11 +118,6 @@ func (f *FSM) doNewHttpProxy(logEntry LogEntryData) error {
 	f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
 	
 	logger.Debugf("{doNewHttpProxy} add new httpProxy %s", key)
-	// httpProxy.ProxyMap = f.ctx.State.ProxyMap
-	// f.ctx.State.ProxyMap.Relations[l.Pattern] = httpProxy
-	// f.ctx.State.ProxyMap.Locations[l.Pattern] = l
-	// f.ctx.State.ProxyMap.Router.Add(key, httpProxy)
-	// httpProxy.HealthCheck()
 	return nil
 }
 
@@ -132,4 +131,18 @@ func (f *FSM) doSetRateLimiter(logEntry LogEntryData) error {
 		return HttpProxyNotExistsError
 	}
 	return router.SetRateLimiter(httpProxy, limiterInfo)
+}
+
+func (f *FSM) doHandleAcl(logEntry LogEntryData) error {
+	ipNet, optType := logEntry.Key, logEntry.Value
+	if optType == "delete" {
+		ret := f.ctx.State.ProxyMap.Acl.Delete(ipNet)
+		if !ret {
+			return fmt.Errorf("can't delete ip")
+		}
+	} else if optType == "insert" {
+		err := f.ctx.State.ProxyMap.Acl.Add(ipNet, ipNet)
+		return err
+	}
+	return nil
 }

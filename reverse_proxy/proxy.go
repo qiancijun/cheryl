@@ -9,8 +9,10 @@ import (
 	"net/url"
 	"sync"
 
+	"com.cheryl/cheryl/acl"
 	"com.cheryl/cheryl/balancer"
 	"com.cheryl/cheryl/config"
+	"com.cheryl/cheryl/logger"
 	rateLimit "com.cheryl/cheryl/rate_limit"
 	"com.cheryl/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
@@ -44,6 +46,7 @@ type ProxyMap struct {
 	Router    Router `json:"-"`
 	Limiters  map[string][]LimiterInfo
 	Infos     Info
+	Acl       *acl.RadixTree
 }
 
 type Info struct {
@@ -57,6 +60,22 @@ type LimiterInfo struct {
 	Speed       int64  `json:"speed"`     // 速率
 	MaxThread   int    `json:"maxThread"` // 最大并发数量
 	Duration    int    `json:"duration"`  // 超时时间
+}
+
+func NewProxyMap() *ProxyMap {
+	rt := acl.NewRadixTree()
+	router := GetRouterInstance("default").(*DefaultRouter)
+	router.acl = rt
+	return &ProxyMap{
+		Relations: make(map[string]*HTTPProxy),
+		Router:    router,
+		Locations: make(map[string]config.Location),
+		Infos: Info{
+			RouterType: "default",
+		},
+		Limiters: make(map[string][]LimiterInfo),
+		Acl:      rt,
+	}
 }
 
 // 对每一个 URL 创建反向代理并且记录到 URL 树中
@@ -85,6 +104,7 @@ func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm)
 		alive[host] = true
 		hostMap[host] = proxy
 		hosts = append(hosts, host)
+		logger.Debugf("success create reverproxy %s", host)
 	}
 
 	// 为代理配置一个负载均衡器
@@ -103,6 +123,10 @@ func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm)
 }
 
 func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !h.accessControl(utils.RemoteIp(r)) {
+		w.WriteHeader(403)
+		return
+	}
 	host, err := h.Lb.Balance(utils.GetIP(r.RemoteAddr))
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
@@ -114,6 +138,13 @@ func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Lb.Inc(host)
 	defer h.Lb.Done(host)
 	h.HostMap[host].ServeHTTP(w, r)
+}
+
+func (h *HTTPProxy) accessControl(ip string) bool {
+	logger.Debug("%s will access the system", ip)
+	radixTree := h.ProxyMap.Acl
+	ret := radixTree.Search(ip)
+	return ret == ""
 }
 
 func (proxyMap *ProxyMap) Marshal() ([]byte, error) {
@@ -132,16 +163,6 @@ func (proxyMap *ProxyMap) UnMarshal(serialized io.ReadCloser) error {
 
 func (proxyMap *ProxyMap) AddRelations(pattern string, proxy *HTTPProxy, location config.Location) {
 	proxy.ProxyMap = proxyMap
-	// if _, has := proxyMap.Relations[pattern]; !has {
-	// 	proxyMap.Relations[pattern] = proxy
-	// 	logger.Warnf("can't find reverse proxy, the prefix is %s", pattern)
-	// 	return
-	// }
-	// if _, has := proxyMap.Locations[pattern]; !has {
-	// 	proxy.ProxyMap.Locations[pattern] = location
-	// 	logger.Warnf("can't find relation, the prefix is %s", pattern)
-	// 	return
-	// }
 	proxyMap.Relations[pattern] = proxy
 	proxy.ProxyMap.Locations[pattern] = location
 	proxyMap.Router.Add(pattern, proxy)

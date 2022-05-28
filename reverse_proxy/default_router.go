@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"com.cheryl/cheryl/acl"
 	"com.cheryl/cheryl/logger"
 	ratelimit "com.cheryl/cheryl/rate_limit"
 	"com.cheryl/cheryl/utils"
@@ -16,6 +18,7 @@ import (
 type DefaultRouter struct {
 	sync.RWMutex
 	hosts map[string]*HTTPProxy
+	acl *acl.RadixTree
 }
 
 func (r *DefaultRouter) Add(p string, proxy *HTTPProxy) {
@@ -45,6 +48,12 @@ func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // 具体路由选择的算法
 func (r *DefaultRouter) route(w http.ResponseWriter, req *http.Request) {
+	// 判断是否被禁止访问
+	isPermit := r.accessControl(req)
+	if !isPermit {
+		w.WriteHeader(403)
+		return
+	}
 	path := req.URL.Path
 	nextPath := path
 	// O(n) 倒叙搜索
@@ -57,6 +66,7 @@ func (r *DefaultRouter) route(w http.ResponseWriter, req *http.Request) {
 			// 找到了最长匹配的前缀路由，负载均衡转发请求
 			if r.HasPrefix(nextPath) {
 				httpProxy = r.hosts[nextPath]
+				// 判断是否被禁止访问
 				host, err := httpProxy.Lb.Balance(utils.GetIP(req.RemoteAddr))
 				logger.Debugf("debug: DefaultRouter has found the longest path: %s, ready redirect to the host: %s", nextPath, host)
 				if err != nil {
@@ -191,4 +201,16 @@ func (r *DefaultRouter) SetRateLimiter(httpProxy *HTTPProxy, info LimiterInfo) e
 	limiters := proxyMap.Limiters
 	limiters[httpProxy.Pattern] = append(limiters[httpProxy.Pattern], info)
 	return nil
+}
+
+func (r *DefaultRouter) accessControl(req *http.Request) bool {
+	ipWithPort := strings.Split(utils.RemoteIp(req), ":")
+	ip := ipWithPort[0]
+	logger.Debugf("%s will access the system", ip)
+	radixTree := r.acl
+	ret := radixTree.Search(ip) == ""
+	if ret {
+		logger.Debugf("%s is forbidden to access system")
+	}
+	return ret
 }

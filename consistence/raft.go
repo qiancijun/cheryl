@@ -21,18 +21,21 @@ var (
 
 func Start(conf *config.Config) {
 	// TODO: 类型封装
-	proxyMap := reverseproxy.ProxyMap{
-		Relations: make(map[string]*reverseproxy.HTTPProxy),
-		Router:    reverseproxy.GetRouterInstance("default"),
-		Locations: make(map[string]config.Location),
-		Infos:     reverseproxy.Info{
-			RouterType: "default",
-		},
-		Limiters: make(map[string][]reverseproxy.LimiterInfo),
-	}
+	// proxyMap := reverseproxy.ProxyMap{
+	// 	Relations: make(map[string]*reverseproxy.HTTPProxy),
+	// 	Router:    reverseproxy.GetRouterInstance("default"),
+	// 	Locations: make(map[string]config.Location),
+	// 	Infos:     reverseproxy.Info{
+	// 		RouterType: "default",
+	// 	},
+	// 	Limiters: make(map[string][]reverseproxy.LimiterInfo),
+	// }
+
+	proxyMap := reverseproxy.NewProxyMap()
+	logger.Debug("init proxyMap success")
 
 	state := &State{
-		ProxyMap: &proxyMap,
+		ProxyMap: proxyMap,
 	}
 
 	stateContext := &StateContext{
@@ -112,7 +115,7 @@ func createProxyWithLocation(ctx *StateContext, l config.Location) {
 	}
 	ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
 	// httpProxy.HealthCheck()
-	err = ctx.writeLogEntry(1, l.Pattern, make(map[string]string, 0), l, reverseproxy.LimiterInfo{})
+	err = ctx.writeLogEntry(1, l.Pattern, "", l, reverseproxy.LimiterInfo{})
 	if err != nil {
 		logger.Warnf("{createProxyWithLocation} write logEntry failed: %s", err.Error())
 	}
@@ -137,7 +140,7 @@ func startRouter(ctx *StateContext, conf *config.Config) {
 	}
 }
 
-func (ctx *StateContext) writeLogEntry(opt int, key string, value map[string]string, location config.Location, limiterInfo reverseproxy.LimiterInfo) error {
+func (ctx *StateContext) writeLogEntry(opt int, key string, value string, location config.Location, limiterInfo reverseproxy.LimiterInfo) error {
 	event := LogEntryData{opt, key, value, location, limiterInfo}
 	logger.Debugf("{writeLogEntry} the new event: %s %v", key, value)
 	eventBytes, err := jsoniter.Marshal(event)

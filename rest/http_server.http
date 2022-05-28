@@ -45,3 +45,21 @@ Content-Type: application/json
     "pattern": "/api",
     "method": "/hello"
 }
+###
+POST http://localhost:9119/acl
+Content-Type: application/json
+
+{
+    "type": 1,
+    "ipAddress": "127.0.0.1/32"
+}
+###
+GET http://localhost:9119/getAcl
+###
+POST http://localhost:9119/acl
+Content-Type: application/json
+
+{
+    "type": 0,
+    "ipAddress": "127.0.0.1/32"
+}

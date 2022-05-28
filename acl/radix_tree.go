@@ -1,173 +1,203 @@
 package acl
 
 import (
+	"strconv"
 	"strings"
+	"sync"
 
 	"com.cheryl/cheryl/logger"
+	"com.cheryl/cheryl/utils"
 )
 
 const (
-	NO_MISMATCH = -1
+	MAX_IPV4_BIT uint32 = 0x80000000
+	NO_VALUE     string = ""
 )
 
 type RadixTree struct {
-	root *Node
+	sync.RWMutex
+	root   *radixNode      
+	free   *radixNode      
+	Record map[string]bool `json:"record"`
+}
+
+type radixNode struct {
+	right  *radixNode
+	left   *radixNode
+	parent *radixNode
+	value  string
 }
 
 func NewRadixTree() *RadixTree {
+	logger.Debug("init RadisTree success")
 	return &RadixTree{
-		root: NewNode(false),
+		root:   &radixNode{nil, nil, nil, NO_VALUE},
+		free:   nil,
+		Record: make(map[string]bool),
 	}
 }
 
-func (tree *RadixTree) Insert(word string) {
-	current := tree.root
-	currIndex := 0
-	for currIndex < len(word) {
-		transitionChar := word[currIndex]
-		currentEdge, has := current.GetTransition(transitionChar)
-		currStr := word[currIndex:]
+func (tree *RadixTree) newNode() *radixNode {
+	var node *radixNode
+	if tree.free != nil {
+		node = tree.free
+		tree.free = tree.free.right
+		return node
+	}
+	return &radixNode{nil, nil, nil, NO_VALUE}
+}
 
-		if !has {
-			current.edges[transitionChar] = NewEdge(currStr)
+func (tree *RadixTree) insert(key uint32, mask uint32, value string) {
+	var node, next *radixNode
+	node, next = tree.root, tree.root
+	bit := MAX_IPV4_BIT
+	for (bit & mask) != 0 {
+		if (key & bit) != 0 {
+			next = node.right
+		} else {
+			next = node.left
+		}
+
+		if next == nil {
 			break
 		}
+		bit >>= 1
+		node = next
+	}
 
-		splitIndex := getFirstMismatchLetter(currStr, currentEdge.label)
-		if splitIndex == NO_MISMATCH {
-			if len(currStr) == len(currentEdge.label) {
-				currentEdge.next.isLeaf = true
-				break
-			} else if len(currStr) < len(currentEdge.label) {
-				suffix := currentEdge.label[len(currStr):]
-				currentEdge.label = currStr
-				newNext := NewNode(true)
-				afterNewNext := currentEdge.next
-				currentEdge.next = newNext
-				newNext.AddEdge(suffix, afterNewNext)
-				break
-			} else {
-				splitIndex = len(currentEdge.label)
-			}
+	if next != nil {
+		node.value = value
+		return
+	}
+
+	for (bit & mask) != 0 {
+		next = tree.newNode()
+		if next == nil {
+			logger.Error("can't create radixTree Node, this is a bug")
+		}
+		next.parent = node
+		next.value = NO_VALUE
+		if (key & bit) != 0 {
+			node.right = next
 		} else {
-			suffix := currentEdge.label[splitIndex:]
-			currentEdge.label = currentEdge.label[0:splitIndex]
-			prevNext := currentEdge.next
-			currentEdge.next = NewNode(false)
-			currentEdge.next.AddEdge(suffix, prevNext)
+			node.left = next
 		}
-
-		current = currentEdge.next
-		currIndex += splitIndex
+		bit >>= 1
+		node = next
 	}
+	node.value = value
 }
 
-func getFirstMismatchLetter(word string, edgeWord string) int {
-	length := min(len(word), len(edgeWord))
-	for i := 1; i < length; i++ {
-		if word[i] != edgeWord[i] {
-			return i
-		}
+func (tree *RadixTree) Add(ipNet string, value string) error {
+	strs := strings.Split(ipNet, "/")
+	ipStr := strs[0]
+	ip, err := utils.InetToi(ipStr)
+	if err != nil {
+		return err
 	}
-	return NO_MISMATCH
+	mask := strs[1]
+	cidr, err := strconv.Atoi(mask)
+	if err != nil {
+		return err
+	}
+	var netMask uint32 = ((1 << (32 - cidr)) - 1) ^ 0xffffffff
+	tree.insert(ip, netMask, value)
+	tree.Record[ipNet] = true
+	return nil
 }
 
-func (tree *RadixTree) Search(word string) bool {
-	current := tree.root
-	currIndex := 0
-	for currIndex < len(word) {
-		transitionChar := word[currIndex]
-		edge, has := current.GetTransition(transitionChar)
-		if !has {
-			return false
+func (tree *RadixTree) search(key uint32) string {
+	bit := MAX_IPV4_BIT
+	node := tree.root
+	value := NO_VALUE
+	for node != nil {
+		if node.value != NO_VALUE {
+			value = node.value
 		}
-		currSubstring := word[currIndex:]
-		if !strings.HasPrefix(currSubstring, edge.label) {
-			return false
+
+		if (key & bit) != 0 {
+			node = node.right
+		} else {
+			node = node.left
 		}
-		currIndex += len(edge.label)
-		current = edge.next
+		bit >>= 1
 	}
-	return current.isLeaf
+	return value
 }
 
-func (tree *RadixTree) IPV4(ip string) bool {
-	current := tree.root
-	currIndex := 0
-	for currIndex < len(ip) {
-		transitionChar := ip[currIndex]
-		edge, has := current.GetTransition(transitionChar)
-		if !has {
-			return false
+func (tree *RadixTree) Search(ip string) string {
+	i, _ := utils.InetToi(ip)
+	return tree.search(i)
+}
+
+func (tree *RadixTree) Delete(ipNet string) bool {
+	strs := strings.Split(ipNet, "/")
+	ipStr := strs[0]
+	ip, err := utils.InetToi(ipStr)
+	if err != nil {
+		return false
+	}
+	mask := strs[1]
+	cidr, err := strconv.Atoi(mask)
+	if err != nil {
+		return false
+	}
+	var netMask uint32 = ((1 << (32 - cidr)) - 1) ^ 0xffffffff
+	ret := tree.delete(ip, netMask)
+	if ret {
+		delete(tree.Record, ipNet)
+	}
+	return ret
+}
+
+func (tree *RadixTree) delete(key uint32, mask uint32) bool {
+	bit := MAX_IPV4_BIT
+	node := tree.root
+	for node != nil && (bit&mask) != 0 {
+		if (key & bit) != 0 {
+			node = node.right
+		} else {
+			node = node.left
 		}
-		if current.isLeaf {
+		bit >>= 1
+	}
+	if node == nil {
+		return false
+	}
+	if node.right != nil || node.left != nil {
+		if node.value != NO_VALUE {
+			node.value = NO_VALUE
 			return true
 		}
-		currSubstring := ip[currIndex:]
-		if !strings.HasPrefix(currSubstring, edge.label) {
-			return false
-		}
-		currIndex += len(edge.label)
-		current = edge.next
+		return false
 	}
-	return current.isLeaf
-}
-
-func (tree *RadixTree) Delete(word string) {
-	tree.root = deleteWord(tree.root, tree.root, word)
-}
-
-func deleteWord(root *Node, current *Node, word string) *Node {
-	if word == "" {
-		if len(current.edges) == 0 && current != nil {
-			return nil
+	for {
+		if node.parent.right == node {
+			node.parent.right = nil
+		} else {
+			node.parent.left = nil
 		}
-		current.isLeaf = false
-		return current
-	}
+		node.right = tree.free
+		tree.free = node
+		node = node.parent
 
-	transitionChar := word[0]
-	edge, has := current.GetTransition(transitionChar)
-	if !has || !strings.HasPrefix(word, edge.label) {
-		return current
-	}
-	deleted := deleteWord(root, edge.next, word[len(edge.label):])
-	if deleted == nil {
-		delete(current.edges, transitionChar)
-		if current.TotalEdges() == 0 && !current.isLeaf && current != root {
-			return nil
+		if node.right != nil || node.left != nil {
+			break
 		}
-	} else if deleted.TotalEdges() == 1 && !deleted.isLeaf {
-		delete(current.edges, transitionChar)
-		for _, afterDeleted := range deleted.edges {
-			current.AddEdge(edge.label + afterDeleted.label, afterDeleted.next)
+		if node.value != NO_VALUE {
+			break
+		}
+		if node.parent == nil {
+			break
 		}
 	}
-	return current
+	return true
 }
 
-func (tree *RadixTree) PrintAllWords() {
-	printAllWords(*tree.root, "")
-}
-
-func printAllWords(current Node, result string) {
-	if current.isLeaf {
-		logger.Debug(result)
+func (tree *RadixTree) GetBlackList() []string {
+	res := make([]string, 0)
+	for k, _ := range tree.Record {
+		res = append(res, k)
 	}
-	for _, edge := range current.edges {
-		printAllWords(*edge.next, result + edge.label)
-	} 
-}
-
-func min(a, b int) int {
-	if a > b {
-		return b
-	}
-	return a
-}
-func max(a, b int) int {
-	if a < b {
-		return b
-	}
-	return a
+	return res
 }

@@ -3,9 +3,13 @@ package utils
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
+
+	"com.cheryl/cheryl/logger"
 )
 
 var ConnectionTimeout = 2 * time.Second
@@ -52,4 +56,53 @@ func GetOutBoundIP()(ip string, err error)  {
     fmt.Println(localAddr.String())
     ip = strings.Split(localAddr.String(), ":")[0]
     return
+}
+
+func InetToi(ip string) (uint32, error) {
+	ipSegs := strings.Split(ip, ".")
+	var ret uint32 = 0
+	pos := 24
+	for _, ipSeg := range ipSegs {
+		tempInt, err := strconv.Atoi(ipSeg)
+		if err != nil {
+			logger.Warnf("{inetToi} can't convert ip address: %s", err.Error())
+			return 0, err
+		}
+		tempInt <<= pos
+		ret |= uint32(tempInt)
+		pos -= 8
+	}
+	return ret, nil
+}
+
+func RemoteIp(req *http.Request) string {
+	var remoteAddr string
+	// RemoteAddr
+	remoteAddr = req.RemoteAddr
+	if remoteAddr != "" {
+		return remoteAddr
+	}
+	// ipv4
+	remoteAddr = req.Header.Get("ipv4")
+	if remoteAddr != "" {
+		return remoteAddr
+	}
+	//
+	remoteAddr = req.Header.Get("XForwardedFor")
+	if remoteAddr != "" {
+		return remoteAddr
+	}
+	// X-Forwarded-For
+	remoteAddr = req.Header.Get("X-Forwarded-For")
+	if remoteAddr != "" {
+		return remoteAddr
+	}
+	// X-Real-Ip
+	remoteAddr = req.Header.Get("X-Real-Ip")
+	if remoteAddr != "" {
+		return remoteAddr
+	} else {
+		remoteAddr = "127.0.0.1"
+	}
+	return remoteAddr
 }

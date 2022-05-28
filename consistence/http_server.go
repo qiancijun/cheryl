@@ -46,6 +46,8 @@ func NewHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/proxy", s.doGetProxy)
 	mux.HandleFunc("/methodInfo", s.doGetMehtodLimiter)
 	mux.HandleFunc("/addProxy", s.doAddProxy)
+	mux.HandleFunc("/acl", s.doHandleAcl)
+	mux.HandleFunc("/getAcl", s.doGetAccessControlList)
 	return s
 }
 
@@ -170,7 +172,7 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// second: send logEntry to the raft cluster
-	err = h.Ctx.writeLogEntry(2, req.Prefix, map[string]string{}, config.Location{}, req.Info)
+	err = h.Ctx.writeLogEntry(2, req.Prefix, "", config.Location{}, req.Info)
 	if err != nil {
 		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
 		logger.Warn(errMsg)
@@ -311,6 +313,62 @@ func (h *HttpServer) doAddProxy(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
+	if !h.checkWritePermission() {
+		w.Write(Error(500, "write method not allowed").Marshal())
+		return
+	}
+	type ReqData struct {
+		Type      int    `json:"type"`
+		IpAddress string `json:"ipAddress"`
+	}
+	var req ReqData
+	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
+		r.Body.Close()
+		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	if req.Type == 0 {
+		// delete
+		if ret := h.Ctx.State.ProxyMap.Acl.Delete(req.IpAddress); !ret {
+			w.Write(Error(500, "can't delete ip").Marshal())
+		} else {
+			err := h.Ctx.writeLogEntry(3, req.IpAddress, "delete", config.Location{}, reverseproxy.LimiterInfo{})
+			if err != nil {
+				errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
+				logger.Warn(errMsg)
+				ret := Error(500, errMsg)
+				w.Write(ret.Marshal())
+				return
+			}
+			w.Write(Ok().Marshal())
+		}
+	} else {
+		// add
+		if err := h.Ctx.State.ProxyMap.Acl.Add(req.IpAddress, req.IpAddress); err != nil {
+			w.Write(Error(500, err.Error()).Marshal())
+		} else {
+			err := h.Ctx.writeLogEntry(3, req.IpAddress, "insert", config.Location{}, reverseproxy.LimiterInfo{})
+			if err != nil {
+				errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
+				logger.Warn(errMsg)
+				ret := Error(500, errMsg)
+				w.Write(ret.Marshal())
+				return
+			}
+			w.Write(Ok().Marshal())
+		}
+	}
+}
+
+func (h *HttpServer) doGetAccessControlList(w http.ResponseWriter, r *http.Request) {
+	list := h.Ctx.State.ProxyMap.Acl.GetBlackList()
+	w.Write(Ok().Put("list", list).Marshal())
+}
+
 func (h *HttpServer) checkWritePermission() bool {
 	return atomic.LoadInt32(&h.enableWrite) == ENABLE_WRITE_TRUE
 }
@@ -322,7 +380,6 @@ func (h *HttpServer) SetWriteFlag(flag bool) {
 		atomic.StoreInt32(&h.enableWrite, ENABLE_WRITE_FALSE)
 	}
 }
-
 
 func validLocation(location config.Location) error {
 	pattern := location.Pattern
