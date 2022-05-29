@@ -136,9 +136,9 @@ func (f *FSM) doSetRateLimiter(logEntry LogEntryData) error {
 func (f *FSM) doHandleAcl(logEntry LogEntryData) error {
 	ipNet, optType := logEntry.Key, logEntry.Value
 	if optType == "delete" {
-		ret := f.ctx.State.ProxyMap.Acl.Delete(ipNet)
-		if !ret {
-			return fmt.Errorf("can't delete ip")
+		err := f.ctx.State.ProxyMap.Acl.Delete(ipNet)
+		if err != nil {
+			return err
 		}
 	} else if optType == "insert" {
 		err := f.ctx.State.ProxyMap.Acl.Add(ipNet, ipNet)

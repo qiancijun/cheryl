@@ -331,10 +331,11 @@ func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
 		w.Write(ret.Marshal())
 		return
 	}
+	logger.Debugf("{doHandleAcl} receive opt type: %d, ipAddress: %s", req.Type, req.IpAddress)
 	if req.Type == 0 {
 		// delete
-		if ret := h.Ctx.State.ProxyMap.Acl.Delete(req.IpAddress); !ret {
-			w.Write(Error(500, "can't delete ip").Marshal())
+		if err := h.Ctx.State.ProxyMap.Acl.Delete(req.IpAddress); err != nil {
+			w.Write(Error(500, err.Error()).Marshal())
 		} else {
 			err := h.Ctx.writeLogEntry(3, req.IpAddress, "delete", config.Location{}, reverseproxy.LimiterInfo{})
 			if err != nil {

@@ -1,6 +1,7 @@
 package acl
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,10 +15,16 @@ const (
 	NO_VALUE     string = ""
 )
 
+var (
+	InvaildIpAddress = errors.New("invaild ip address, maybe with out mask")
+	InvaildNetMask   = errors.New("invaild net mask, must in [0, 32]")
+	CantFindIpNet    = errors.New("can't find ip")
+)
+
 type RadixTree struct {
 	sync.RWMutex
-	root   *radixNode      
-	free   *radixNode      
+	root   *radixNode
+	free   *radixNode
 	Record map[string]bool `json:"record"`
 }
 
@@ -93,7 +100,10 @@ func (tree *RadixTree) Add(ipNet string, value string) error {
 	ipStr := strs[0]
 	ip, err := utils.InetToi(ipStr)
 	if err != nil {
-		return err
+		return InvaildIpAddress
+	}
+	if len(strs) < 2 {
+		return InvaildIpAddress
 	}
 	mask := strs[1]
 	cidr, err := strconv.Atoi(mask)
@@ -130,24 +140,25 @@ func (tree *RadixTree) Search(ip string) string {
 	return tree.search(i)
 }
 
-func (tree *RadixTree) Delete(ipNet string) bool {
+func (tree *RadixTree) Delete(ipNet string) error {
 	strs := strings.Split(ipNet, "/")
 	ipStr := strs[0]
 	ip, err := utils.InetToi(ipStr)
-	if err != nil {
-		return false
+	if err != nil || len(strs) < 2 {
+		return InvaildIpAddress
 	}
 	mask := strs[1]
 	cidr, err := strconv.Atoi(mask)
-	if err != nil {
-		return false
+	if err != nil || cidr < 0 || cidr > 32 {
+		return InvaildNetMask
 	}
 	var netMask uint32 = ((1 << (32 - cidr)) - 1) ^ 0xffffffff
 	ret := tree.delete(ip, netMask)
 	if ret {
 		delete(tree.Record, ipNet)
+		return nil
 	}
-	return ret
+	return CantFindIpNet
 }
 
 func (tree *RadixTree) delete(key uint32, mask uint32) bool {

@@ -25,15 +25,4 @@ func TestRadixTree(t *testing.T) {
 	assert.Equal(t, ip3, ans)
 	ans = tr.Search("192.168.3.4")
 	assert.Equal(t, ip4, ans)
-
-	res := tr.Delete("192.168.3.1/32")
-	assert.True(t, res)
-	ans = tr.Search("192.168.3.1")
-	assert.Equal(t, "", ans)
-	ans = tr.Search("192.168.3.2")
-	assert.Equal(t, ip2, ans)
-	ans = tr.Search("192.168.3.3")
-	assert.Equal(t, ip3, ans)
-	ans = tr.Search("192.168.3.4")
-	assert.Equal(t, ip4, ans)
 }
