@@ -46,7 +46,6 @@ type ProxyMap struct {
 	Router    Router `json:"-"`
 	Limiters  map[string][]LimiterInfo
 	Infos     Info
-	Acl       *acl.RadixTree
 }
 
 type Info struct {
@@ -63,9 +62,8 @@ type LimiterInfo struct {
 }
 
 func NewProxyMap() *ProxyMap {
-	rt := acl.NewRadixTree()
 	router := GetRouterInstance("default").(*DefaultRouter)
-	router.acl = rt
+	// router.acl = rt
 	return &ProxyMap{
 		Relations: make(map[string]*HTTPProxy),
 		Router:    router,
@@ -74,7 +72,6 @@ func NewProxyMap() *ProxyMap {
 			RouterType: "default",
 		},
 		Limiters: make(map[string][]LimiterInfo),
-		Acl:      rt,
 	}
 }
 
@@ -142,7 +139,7 @@ func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPProxy) accessControl(ip string) bool {
 	logger.Debug("%s will access the system", ip)
-	radixTree := h.ProxyMap.Acl
+	radixTree := acl.AccessControlList
 	ret := radixTree.Search(ip)
 	return ret == ""
 }

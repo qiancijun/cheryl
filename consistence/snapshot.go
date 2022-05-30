@@ -1,18 +1,22 @@
 package consistence
 
 import (
-	"com.cheryl/cheryl/config"
+	"io"
+
+	"com.cheryl/cheryl/acl"
 	reverseproxy "com.cheryl/cheryl/reverse_proxy"
 	"github.com/hashicorp/raft"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type snapshot struct {
-	proxyMap *reverseproxy.ProxyMap
-	Locations map[string]*config.Location
+	ProxyMap *reverseproxy.ProxyMap
+	RadixTree *acl.RadixTree
+	// Locations map[string]*config.Location
 }
 
 func (s *snapshot) Persist(sink raft.SnapshotSink) error {
-	snapshotBytes, err := s.proxyMap.Marshal()
+	snapshotBytes, err := s.Marshal()
 	if err != nil {
 		sink.Cancel()
 		return err
@@ -22,6 +26,7 @@ func (s *snapshot) Persist(sink raft.SnapshotSink) error {
 		sink.Cancel()
 		return err
 	}
+
 	if err := sink.Close(); err != nil {
 		sink.Cancel()
 		return err
@@ -30,3 +35,15 @@ func (s *snapshot) Persist(sink raft.SnapshotSink) error {
 }
 
 func (f *snapshot) Release() {}
+
+func (s *snapshot) Marshal() ([]byte, error) {
+	res, err := jsoniter.Marshal(s)
+	return res, err
+}
+
+func (s *snapshot) UnMarshal(serialized io.ReadCloser) error {
+	if err := jsoniter.NewDecoder(serialized).Decode(&s); err != nil {
+		return err
+	}
+	return nil
+}

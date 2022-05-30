@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"com.cheryl/cheryl/acl"
 	"com.cheryl/cheryl/config"
 	"com.cheryl/cheryl/logger"
 	ratelimit "com.cheryl/cheryl/rate_limit"
@@ -28,7 +29,7 @@ type HttpServer struct {
 	enableWrite int32
 }
 
-func NewHttpServer(ctx *StateContext) *HttpServer {
+func newHttpServer(ctx *StateContext) *HttpServer {
 	mux := http.NewServeMux()
 	s := &HttpServer{
 		Ctx:         ctx,
@@ -36,7 +37,7 @@ func NewHttpServer(ctx *StateContext) *HttpServer {
 		enableWrite: ENABLE_WRITE_FALSE,
 		address:     make([]string, 0),
 	}
-	// s.address = append(s.address, utils.GetLocalIpAddress())
+
 	mux.HandleFunc("/ping", s.doPing)
 	mux.HandleFunc("/join", s.doJoin)
 	mux.HandleFunc("/methods", s.doGetMethods)
@@ -69,25 +70,6 @@ func (h *HttpServer) doJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.address = append(h.address, peerAddress)
-
-	// 与远程主机保持心跳，如果失去心跳，从Raft集群中删除
-	// go func() {
-	// 	ticker := time.NewTicker(HealthCheckTimeout)
-	// 	for range ticker.C {
-	// 		if !utils.IsBackendAlive(peerAddress) {
-	// 			removePeerFuture := h.Ctx.State.RaftNode.Raft.RemoveServer(raft.ServerID(peerAddress), 0, 0)
-	// 			if err := removePeerFuture.Error(); err != nil {
-	// 				errMsg := fmt.Sprintf("Error removing peer from raft, peerAddress:%s, err:%v", peerAddress, err)
-	// 				logger.Warn(errMsg)
-	// 				return
-	// 			}
-	// 			logger.Debugf("success remove raft Node, peerAddress: %s", peerAddress)
-	// 			return
-	// 		} else {
-	// 			logger.Debugf("enable connect with peerAddress: %s", peerAddress)
-	// 		}
-	// 	}
-	// }()
 	fmt.Fprint(w, "ok")
 }
 
@@ -334,7 +316,7 @@ func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
 	logger.Debugf("{doHandleAcl} receive opt type: %d, ipAddress: %s", req.Type, req.IpAddress)
 	if req.Type == 0 {
 		// delete
-		if err := h.Ctx.State.ProxyMap.Acl.Delete(req.IpAddress); err != nil {
+		if err := acl.AccessControlList.Delete(req.IpAddress); err != nil {
 			w.Write(Error(500, err.Error()).Marshal())
 		} else {
 			err := h.Ctx.writeLogEntry(3, req.IpAddress, "delete", config.Location{}, reverseproxy.LimiterInfo{})
@@ -349,7 +331,7 @@ func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// add
-		if err := h.Ctx.State.ProxyMap.Acl.Add(req.IpAddress, req.IpAddress); err != nil {
+		if err := acl.AccessControlList.Add(req.IpAddress, req.IpAddress); err != nil {
 			w.Write(Error(500, err.Error()).Marshal())
 		} else {
 			err := h.Ctx.writeLogEntry(3, req.IpAddress, "insert", config.Location{}, reverseproxy.LimiterInfo{})
@@ -366,7 +348,7 @@ func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HttpServer) doGetAccessControlList(w http.ResponseWriter, r *http.Request) {
-	list := h.Ctx.State.ProxyMap.Acl.GetBlackList()
+	list := acl.AccessControlList.GetBlackList()
 	w.Write(Ok().Put("list", list).Marshal())
 }
 

@@ -12,8 +12,8 @@ type Router interface {
 	HasPrefix(string) bool
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
 	SetRateLimiter(*HTTPProxy, LimiterInfo) error
-	route(w http.ResponseWriter, r *http.Request)
-	configRate(*HTTPProxy, string) error
+	Route(w http.ResponseWriter, r *http.Request) (*HTTPProxy, string)
+	ConfigRate(*HTTPProxy, string) error
 }
 
 var (

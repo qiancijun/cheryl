@@ -20,7 +20,7 @@ var (
 	\_____| |_| |_| |_____| |_|  \_\  /_/     |_____| `
 )
 
-type Config struct {
+type CherylConfig struct {
 	Name              string     `yaml:"name"`
 	SSLCertificateKey string     `yaml:"ssl_certificate_key"`
 	Location          []Location `yaml:"location"`
@@ -47,9 +47,9 @@ type RaftConfig struct {
 	SnapshotInterval int    `yaml:"snapshot_interval"`
 }
 
-var config *Config
+var config *CherylConfig
 
-func ReadConfig(fileName string) (*Config, error) {
+func ReadConfig(fileName string) (*CherylConfig, error) {
 	in, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func ReadConfig(fileName string) (*Config, error) {
 	return config, nil
 }
 
-func (c *Config) Print() {
+func (c *CherylConfig) Print() {
 	fmt.Printf("%s\nSchema: %s\nPort: %d\nLocation:\n", ascii, c.Schema, c.Port)
 	for _, l := range c.Location {
 		fmt.Printf("\tRoute: %s\n\tProxyPass: %s\n\tMode: %s\n",
@@ -83,7 +83,7 @@ func (c *Config) Print() {
 	}
 }
 
-func (c *Config) Validation() error {
+func (c *CherylConfig) Validation() error {
 	if c.Schema != "http" && c.Schema != "https" {
 		return fmt.Errorf("the schema \"%s\" not supported", c.Schema)
 	}
@@ -96,6 +96,6 @@ func (c *Config) Validation() error {
 	return nil
 }
 
-func GetConfig() *Config {
+func GetConfig() *CherylConfig {
 	return config
 }

@@ -19,17 +19,7 @@ var (
 	LeaderCheckTimeout = 10 * time.Second
 )
 
-func Start(conf *config.Config) {
-	// TODO: 类型封装
-	// proxyMap := reverseproxy.ProxyMap{
-	// 	Relations: make(map[string]*reverseproxy.HTTPProxy),
-	// 	Router:    reverseproxy.GetRouterInstance("default"),
-	// 	Locations: make(map[string]config.Location),
-	// 	Infos:     reverseproxy.Info{
-	// 		RouterType: "default",
-	// 	},
-	// 	Limiters: make(map[string][]reverseproxy.LimiterInfo),
-	// }
+func Start(conf *config.CherylConfig) {
 
 	proxyMap := reverseproxy.NewProxyMap()
 	logger.Debug("init proxyMap success")
@@ -51,21 +41,21 @@ func Start(conf *config.Config) {
 	}
 
 	// 创建 http Server
-	httpServer := NewHttpServer(stateContext)
+	httpServer := newHttpServer(stateContext)
 	state.Hs = httpServer
 	go func() {
 		http.Serve(httpListen, httpServer.Mux)
 	}()
 
 	// 创建 raft 节点
-	raft, err := Make(conf, stateContext)
+	raft, err := createRaftNode(conf, stateContext)
 	if err != nil {
 		logger.Errorf("create new raft node failed: %s", err.Error())
 	}
 	state.RaftNode = raft
 	// 如果是从节点，尝试加入到主节点中
 	if !conf.Raft.IsLeader && conf.Raft.LeaderAddress != "" {
-		err := JoinRaftCluster(conf)
+		err := joinRaftCluster(conf)
 		if err != nil {
 			logger.Errorf("join raft cluster failed: %s", err.Error())
 		}
@@ -101,7 +91,7 @@ func createListener(port int) (net.Listener, error) {
 	return httpListen, nil
 }
 
-func createProxy(ctx *StateContext, conf *config.Config) {
+func createProxy(ctx *StateContext, conf *config.CherylConfig) {
 	logger.Debugf("{createProxy} %s will createProxy", conf.Name)
 	for _, l := range conf.Location {
 		createProxyWithLocation(ctx, l)
@@ -121,7 +111,7 @@ func createProxyWithLocation(ctx *StateContext, l config.Location) {
 	}
 }
 
-func startRouter(ctx *StateContext, conf *config.Config) {
+func startRouter(ctx *StateContext, conf *config.CherylConfig) {
 	r := http.NewServeMux()
 	router := ctx.State.ProxyMap.Router
 	r.Handle("/", router)

@@ -14,7 +14,7 @@ func TestNewHttpServer(t *testing.T) {
 	assert.NotNil(t, listener)
 
 	ctx := &StateContext{}
-	h := NewHttpServer(ctx)
+	h := newHttpServer(ctx)
 	go func() {
 		http.Serve(listener, h.Mux)
 	}()

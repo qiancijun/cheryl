@@ -23,7 +23,7 @@ type raftNodeInfo struct {
 	leaderNotifych chan bool
 }
 
-func newRaftTransport(conf *config.Config) (*raft.NetworkTransport, error) {
+func newRaftTransport(conf *config.CherylConfig) (*raft.NetworkTransport, error) {
 	address, err := net.ResolveTCPAddr("tcp", conf.Raft.RaftTCPAddress)
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func newRaftTransport(conf *config.Config) (*raft.NetworkTransport, error) {
 	return transport, nil
 }
 
-func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
+func createRaftNode(conf *config.CherylConfig, ctx *StateContext) (*raftNodeInfo, error) {
 	raftConfig := raft.DefaultConfig()
 	// raftConfig.LocalID = raft.ServerID(conf.Raft.RaftTCPAddress)
 	ip, err := utils.GetOutBoundIP()
@@ -104,7 +104,7 @@ func Make(conf *config.Config, ctx *StateContext) (*raftNodeInfo, error) {
 	}, nil
 }
 
-func JoinRaftCluster(conf *config.Config) error {
+func joinRaftCluster(conf *config.CherylConfig) error {
 	url := fmt.Sprintf("http://%s/join?peerAddress=%s", conf.Raft.LeaderAddress, conf.Raft.RaftTCPAddress)
 	response, err := http.Get(url)
 	if err != nil {

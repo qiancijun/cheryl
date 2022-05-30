@@ -2,12 +2,14 @@ package acl
 
 import (
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
 
 	"com.cheryl/cheryl/logger"
 	"com.cheryl/cheryl/utils"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -19,6 +21,7 @@ var (
 	InvaildIpAddress = errors.New("invaild ip address, maybe with out mask")
 	InvaildNetMask   = errors.New("invaild net mask, must in [0, 32]")
 	CantFindIpNet    = errors.New("can't find ip")
+	AccessControlList *RadixTree
 )
 
 type RadixTree struct {
@@ -35,8 +38,12 @@ type radixNode struct {
 	value  string
 }
 
+func init() {
+	AccessControlList = NewRadixTree()
+}
+
 func NewRadixTree() *RadixTree {
-	logger.Debug("init RadisTree success")
+	logger.Debug("init RadixTree success")
 	return &RadixTree{
 		root:   &radixNode{nil, nil, nil, NO_VALUE},
 		free:   nil,
@@ -211,4 +218,19 @@ func (tree *RadixTree) GetBlackList() []string {
 		res = append(res, k)
 	}
 	return res
+}
+
+
+func (tree *RadixTree) Marshal() ([]byte, error) {
+	tree.RLock()
+	defer tree.RUnlock()
+	res, err := jsoniter.Marshal(tree)
+	return res, err
+}
+
+func (tree *RadixTree) UnMarshal(serialized io.ReadCloser) error {
+	if err := jsoniter.NewDecoder(serialized).Decode(&tree); err != nil {
+		return err
+	}
+	return nil
 }
