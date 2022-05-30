@@ -223,7 +223,7 @@ func (h *HttpServer) doGetProxy(w http.ResponseWriter, r *http.Request) {
 		hostMap := v.HostMap
 		alive := v.Alive
 		res[k] = make([]Response, 0)
-		for host, _ := range hostMap {
+		for host := range hostMap {
 			res[k] = append(res[k], Response{host, alive[host]})
 		}
 	}
