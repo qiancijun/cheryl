@@ -1,16 +1,12 @@
 package reverseproxy
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
-	"time"
 
 	"com.cheryl/cheryl/acl"
 	"com.cheryl/cheryl/logger"
-	ratelimit "com.cheryl/cheryl/rate_limit"
 	"com.cheryl/cheryl/utils"
 )
 
@@ -39,11 +35,19 @@ func (r *DefaultRouter) HasPrefix(p string) bool {
 	return has
 }
 
-// 根据请求的路径分割前缀，找最长匹配的路由
+/*
+	执行方法的顺序：
+	1. 判断 ip 是否在黑名单内 （acl）
+	2. 执行一遍 FilterChain 的方法 （待做）
+	3. 根据 path 找到反向代理
+	4. 限流
+	5. 根据反向代理中的主机路径，进行负载均衡
+	6. 找出一个转发的主机，转发请求
+*/
 func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	logger.Infof("%s can't catch any path", req.URL)
 	// accessControlList
-	isPermit := r.accessControl(req)
+	isPermit := acl.AccessControlList.AccessControl(utils.RemoteIp(req))
 	if !isPermit {
 		w.WriteHeader(403)
 		return
@@ -53,6 +57,16 @@ func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	httpProxy, Realpath := r.Route(w, req)
 	if httpProxy == nil {
 		w.WriteHeader(404)
+		return
+	}
+
+	// Rate Limit
+	err := httpProxy.invaildToken(Realpath)
+	if err != nil {
+		errMsg := fmt.Sprintf("route error: %s", err.Error())
+		logger.Debug(errMsg)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(errMsg))
 		return
 	}
 
@@ -66,16 +80,6 @@ func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	httpProxy.Lb.Inc(host)
 	defer httpProxy.Lb.Done(host)
-
-	// Rate Limit
-	err = r.invaildToken(httpProxy, Realpath)
-	if err != nil {
-		errMsg := fmt.Sprintf("route error: %s", err.Error())
-		logger.Debug(errMsg)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(errMsg))
-		return
-	}
 
 	// redirect
 	req.URL.Path = Realpath
@@ -111,93 +115,5 @@ func (r *DefaultRouter) Route(w http.ResponseWriter, req *http.Request) (*HTTPPr
 	return nil, ""
 }
 
-// 将此次接口访问记录到反向代理器中，用于配置限流
-func (r *DefaultRouter) ConfigRate(httpProxy *HTTPProxy, path string) error {
-	if httpProxy == nil {
-		errMsg := "default_router can't find the httpProxy"
-		return errors.New(errMsg)
-	}
-	methods := httpProxy.Methods
-	_, has := methods[path]
-	if !has {
-		r.Lock()
-		defer r.Unlock()
-		// 默认创建一个 qps 限流器
-		limiter, err := ratelimit.Build("qps")
-		if err != nil {
-			errMsg := "can't find qps limiter"
-			return errors.New(errMsg)
-		}
-		methods[path] = limiter
-		// 在 ProxyMap 中记录
-		proxyMap := httpProxy.ProxyMap
-		limiters := proxyMap.Limiters
-		limiters[httpProxy.Pattern] = append(limiters[httpProxy.Pattern], LimiterInfo{
-			PathName:    path,
-			LimiterType: "qps",
-			Volumn:      -1,
-			Speed:       0,
-			MaxThread:   -1,
-			Duration:    0,
-		})
 
-	} else {
-		return ratelimit.LimiterAlreadyExists
-	}
-	return nil
-}
 
-func (r *DefaultRouter) invaildToken(proxy *HTTPProxy, api string) error {
-	methods := proxy.Methods
-	limiter := methods[api]
-	// 还未配置限流器，经过第一次访问之后，默认创建一个 qps 限流器
-	if limiter == nil {
-		err := r.ConfigRate(proxy, api)
-		return err
-	}
-	logger.Debugf("{invaildToken} method: %s 's limiter info: volumn: %d speed: %d", api, limiter.GetVolumn(), limiter.GetVolumn())
-	timeout := limiter.GetTimeout()
-
-	var err error
-	if timeout == 0 {
-		err = limiter.Take()
-	} else {
-		err = limiter.TakeWithTimeout(timeout)
-	}
-	return err
-}
-
-func (r *DefaultRouter) SetRateLimiter(httpProxy *HTTPProxy, info LimiterInfo) error {
-	logger.Debugf("{SetRateLimiter} pathName: %s limiterType: %s volumn: %d speed: %d maxThread: %d", info.PathName, info.LimiterType, info.Volumn, info.Speed, info.MaxThread)
-	methods := httpProxy.Methods
-	r.Lock()
-	defer r.Unlock()
-
-	limiter, err := ratelimit.Build(ratelimit.LimiterType(info.LimiterType))
-	if err != nil {
-		return err
-	}
-	if info.Speed != 0 {
-		limiter.SetRate(info.Volumn, info.Speed)
-	}
-	if info.Duration != 0 {
-		limiter.SetTimeout(time.Duration(info.Duration) * time.Millisecond)
-	}
-	methods[info.PathName] = limiter
-	// 在 ProxyMap 中记录
-	limiters := httpProxy.ProxyMap.Limiters
-	limiters[httpProxy.Pattern] = append(limiters[httpProxy.Pattern], info)
-	return nil
-}
-
-func (r *DefaultRouter) accessControl(req *http.Request) bool {
-	ipWithPort := strings.Split(utils.RemoteIp(req), ":")
-	ip := ipWithPort[0]
-	logger.Debugf("%s will access the system", ip)
-	radixTree := acl.AccessControlList
-	ret := radixTree.Search(ip) == ""
-	if ret {
-		logger.Debugf("%s is forbidden to access system")
-	}
-	return ret
-}

@@ -31,6 +31,7 @@ type CherylConfig struct {
 	HealthCheck       bool       `yaml:"tcp_health_check"`
 	LogLevel          string     `yaml:"log_level"`
 	Raft              RaftConfig `yaml:"raft"`
+	RouterType        string     `yaml:"router_type"`
 }
 
 type Location struct {
@@ -40,11 +41,15 @@ type Location struct {
 }
 
 type RaftConfig struct {
-	DataDir          string `yaml:"data_dir"`
-	RaftTCPAddress   string `yaml:"tcp_address"`
-	LeaderAddress    string `yaml:"leader_address"`
-	IsLeader         bool   `yaml:"leader"`
-	SnapshotInterval int    `yaml:"snapshot_interval"`
+	DataDir           string `yaml:"data_dir"`
+	RaftTCPAddress    string `yaml:"tcp_address"`
+	LeaderAddress     string `yaml:"leader_address"`
+	IsLeader          bool   `yaml:"leader"`
+	SnapshotInterval  int    `yaml:"snapshot_interval"`
+	SnapshotThreshold uint64    `yaml:"snapshot_threshold"`
+	LogLevel          string `yaml:"log_level"`
+	HeartbeatTimeout  int    `yaml:"heartbeat_timeout"`
+	ElectionTimeout   int    `yaml:"election_timeout"`
 }
 
 var config *CherylConfig

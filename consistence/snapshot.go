@@ -12,7 +12,6 @@ import (
 type snapshot struct {
 	ProxyMap *reverseproxy.ProxyMap
 	RadixTree *acl.RadixTree
-	// Locations map[string]*config.Location
 }
 
 func (s *snapshot) Persist(sink raft.SnapshotSink) error {

@@ -113,7 +113,8 @@ func createProxyWithLocation(ctx *StateContext, l config.Location) {
 
 func startRouter(ctx *StateContext, conf *config.CherylConfig) {
 	r := http.NewServeMux()
-	router := ctx.State.ProxyMap.Router
+	// router := ctx.State.ProxyMap.Router
+	router := reverseproxy.GetRouterInstance(conf.RouterType)
 	r.Handle("/", router)
 	svr := http.Server{
 		Addr:    fmt.Sprintf(":%d", conf.Port),

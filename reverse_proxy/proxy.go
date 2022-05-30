@@ -1,6 +1,7 @@
 package reverseproxy
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -8,12 +9,13 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sync"
+	"time"
 
 	"com.cheryl/cheryl/acl"
 	"com.cheryl/cheryl/balancer"
 	"com.cheryl/cheryl/config"
 	"com.cheryl/cheryl/logger"
-	rateLimit "com.cheryl/cheryl/rate_limit"
+	ratelimit "com.cheryl/cheryl/rate_limit"
 	"com.cheryl/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -34,7 +36,7 @@ type HTTPProxy struct {
 	Pattern  string
 	Lb       balancer.Balancer
 	Alive    map[string]bool
-	Methods  map[string]rateLimit.RateLimiter
+	Methods  map[string]ratelimit.RateLimiter
 	ProxyMap *ProxyMap
 	sync.RWMutex
 }
@@ -43,7 +45,6 @@ type ProxyMap struct {
 	sync.RWMutex
 	Relations map[string]*HTTPProxy `json:"-"`
 	Locations map[string]config.Location
-	Router    Router `json:"-"`
 	Limiters  map[string][]LimiterInfo
 	Infos     Info
 }
@@ -62,11 +63,11 @@ type LimiterInfo struct {
 }
 
 func NewProxyMap() *ProxyMap {
-	router := GetRouterInstance("default").(*DefaultRouter)
+	// router := GetRouterInstance("default").(*DefaultRouter)
 	// router.acl = rt
 	return &ProxyMap{
 		Relations: make(map[string]*HTTPProxy),
-		Router:    router,
+		// Router:    router,
 		Locations: make(map[string]config.Location),
 		Infos: Info{
 			RouterType: "default",
@@ -79,7 +80,7 @@ func NewProxyMap() *ProxyMap {
 func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm) (*HTTPProxy, error) {
 	hostMap := make(map[string]*httputil.ReverseProxy)
 	alive := make(map[string]bool)
-	methods := make(map[string]rateLimit.RateLimiter)
+	methods := make(map[string]ratelimit.RateLimiter)
 
 	hosts := make([]string, 0)
 	for _, targetHost := range targetHosts {
@@ -144,6 +145,83 @@ func (h *HTTPProxy) accessControl(ip string) bool {
 	return ret == ""
 }
 
+func (httpProxy *HTTPProxy) SetRateLimiter(info LimiterInfo) error {
+	logger.Debugf("{SetRateLimiter} pathName: %s limiterType: %s volumn: %d speed: %d maxThread: %d", info.PathName, info.LimiterType, info.Volumn, info.Speed, info.MaxThread)
+	methods := httpProxy.Methods
+	httpProxy.Lock()
+	defer httpProxy.Unlock()
+
+	limiter, err := ratelimit.Build(ratelimit.LimiterType(info.LimiterType))
+	if err != nil {
+		return err
+	}
+	if info.Speed != 0 {
+		limiter.SetRate(info.Volumn, info.Speed)
+	}
+	if info.Duration != 0 {
+		limiter.SetTimeout(time.Duration(info.Duration) * time.Millisecond)
+	}
+	methods[info.PathName] = limiter
+	// 在 ProxyMap 中记录
+	limiters := httpProxy.ProxyMap.Limiters
+	limiters[httpProxy.Pattern] = append(limiters[httpProxy.Pattern], info)
+	return nil
+}
+
+func (httpProxy *HTTPProxy) invaildToken(api string) error {
+	methods := httpProxy.Methods
+	limiter := methods[api]
+	// 还未配置限流器，经过第一次访问之后，默认创建一个 qps 限流器
+	if limiter == nil {
+		err := httpProxy.configRate(api)
+		return err
+	}
+	logger.Debugf("{invaildToken} method: %s 's limiter info: volumn: %d speed: %d", api, limiter.GetVolumn(), limiter.GetVolumn())
+	timeout := limiter.GetTimeout()
+
+	var err error
+	if timeout == 0 {
+		err = limiter.Take()
+	} else {
+		err = limiter.TakeWithTimeout(timeout)
+	}
+	return err
+}
+
+// 将此次接口访问记录到反向代理器中，用于配置限流
+func (httpProxy *HTTPProxy) configRate(path string) error {
+	if httpProxy == nil {
+		errMsg := "default_router can't find the httpProxy"
+		return errors.New(errMsg)
+	}
+	methods := httpProxy.Methods
+	_, has := methods[path]
+	if !has {
+		// 默认创建一个 qps 限流器
+		limiter, err := ratelimit.Build("qps")
+		if err != nil {
+			errMsg := "can't find qps limiter"
+			return errors.New(errMsg)
+		}
+		methods[path] = limiter
+		// 在 ProxyMap 中记录
+		proxyMap := httpProxy.ProxyMap
+		limiters := proxyMap.Limiters
+		limiters[httpProxy.Pattern] = append(limiters[httpProxy.Pattern], LimiterInfo{
+			PathName:    path,
+			LimiterType: "qps",
+			Volumn:      -1,
+			Speed:       0,
+			MaxThread:   -1,
+			Duration:    0,
+		})
+
+	} else {
+		return ratelimit.LimiterAlreadyExists
+	}
+	return nil
+}
+
 func (proxyMap *ProxyMap) Marshal() ([]byte, error) {
 	proxyMap.RLock()
 	defer proxyMap.RUnlock()
@@ -162,6 +240,7 @@ func (proxyMap *ProxyMap) AddRelations(pattern string, proxy *HTTPProxy, locatio
 	proxy.ProxyMap = proxyMap
 	proxyMap.Relations[pattern] = proxy
 	proxy.ProxyMap.Locations[pattern] = location
-	proxyMap.Router.Add(pattern, proxy)
+	// proxyMap.Router.Add(pattern, proxy)
+	RouterSingleton.Add(pattern, proxy)
 	proxy.HealthCheck()
 }

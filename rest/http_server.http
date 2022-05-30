@@ -53,7 +53,7 @@ Content-Type: application/json
 
 {
     "type": 1,
-    "ipAddress": "127.0.0.1/32"
+    "ipAddress": "192.168.3.1/32"
 }
 ###
 GET http://localhost:9119/getAcl

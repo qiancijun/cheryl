@@ -220,6 +220,17 @@ func (tree *RadixTree) GetBlackList() []string {
 	return res
 }
 
+func (tree *RadixTree) AccessControl(ipAddress string) bool {
+	ipWithPort := strings.Split(ipAddress, ":")
+	ip := ipWithPort[0]
+	logger.Debugf("%s will access the system", ip)
+	ret := tree.Search(ip) == ""
+	if ret {
+		logger.Debugf("%s is forbidden to access system")
+	}
+	return ret
+}
+
 
 func (tree *RadixTree) Marshal() ([]byte, error) {
 	tree.RLock()

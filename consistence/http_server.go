@@ -49,6 +49,7 @@ func newHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/addProxy", s.doAddProxy)
 	mux.HandleFunc("/acl", s.doHandleAcl)
 	mux.HandleFunc("/getAcl", s.doGetAccessControlList)
+	mux.HandleFunc("/getRateLimiterType", s.doGetRateLimiterType)
 	return s
 }
 
@@ -145,7 +146,8 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 
 	logger.Debugf("receive limiter info: %s", req)
 
-	err := h.Ctx.State.ProxyMap.Router.SetRateLimiter(httpProxy, req.Info)
+	// err := h.Ctx.State.ProxyMap.Router.SetRateLimiter(httpProxy, req.Info)
+	err := httpProxy.SetRateLimiter(req.Info)
 	if err != nil {
 		errMsg := fmt.Sprintf("can't set the %s%s RateLimiter: %s", req.Prefix, req.Info.PathName, err.Error())
 		logger.Warn(errMsg)
@@ -350,6 +352,11 @@ func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
 func (h *HttpServer) doGetAccessControlList(w http.ResponseWriter, r *http.Request) {
 	list := acl.AccessControlList.GetBlackList()
 	w.Write(Ok().Put("list", list).Marshal())
+}
+
+func (h *HttpServer) doGetRateLimiterType(w http.ResponseWriter, r *http.Request) {
+	ret := ratelimit.GetLimiterType()
+	w.Write(Ok().Put("list", ret).Marshal())
 }
 
 func (h *HttpServer) checkWritePermission() bool {

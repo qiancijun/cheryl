@@ -36,3 +36,10 @@ func Build(t LimiterType) (RateLimiter, error) {
 	}
 	return factory(), nil
 }
+
+func GetLimiterType() (res []string) {
+	for k := range rateLimiterFactories {
+		res = append(res,string(k))
+	}
+	return
+}

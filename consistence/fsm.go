@@ -60,7 +60,10 @@ func (f *FSM) Apply(logEntry *raft.Log) interface{} {
 }
 
 func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
-	return &snapshot{ProxyMap: f.ctx.State.ProxyMap, RadixTree: acl.AccessControlList}, nil
+	return &snapshot{
+		ProxyMap: f.ctx.State.ProxyMap, 
+		RadixTree: acl.AccessControlList,
+	}, nil
 }
 
 func (f *FSM) Restore(serialized io.ReadCloser) error {
@@ -72,13 +75,13 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 		logger.Errorf("can't restore State: %s", err.Error())
 		return err
 	}
-	// logger.Debug(s.RadixTree)
+	// 重新创建映射关系
 	f.ctx.State.ProxyMap = s.ProxyMap
 	f.ctx.State.ProxyMap.Relations = make(map[string]*reverseproxy.HTTPProxy)
 	// 重新创建 Router
 	routerType := f.ctx.State.ProxyMap.Infos.RouterType
-	router := reverseproxy.GetRouterInstance(routerType)
-	f.ctx.State.ProxyMap.Router = router
+	reverseproxy.GetRouterInstance(routerType)
+	// f.ctx.State.ProxyMap.Router = router
 	logger.Debugf("{Restore} locations: %s", f.ctx.State.ProxyMap.Locations)
 	for _, l := range f.ctx.State.ProxyMap.Locations {
 		logger.Debugf("{Restore} found location: pattern: %s proxypass: %s balanceMode: %s", l.Pattern, l.ProxyPass, l.BalanceMode)
@@ -97,7 +100,7 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 		if !has { continue }
 		for _, limiter := range limiters {
 			// add methods to ProxyMap, then set rate limiter
-			router.SetRateLimiter(httpProxy, limiter)
+			httpProxy.SetRateLimiter(limiter)
 		}
 	}
 
@@ -189,12 +192,12 @@ func (f *FSM) doSetRateLimiter(logEntry LogEntryData) error {
 	f.ctx.State.ProxyMap.Lock()
 	defer f.ctx.State.ProxyMap.Unlock()
 	key, limiterInfo := logEntry.Key, logEntry.LimiterInfo
-	router := f.ctx.State.ProxyMap.Router
+	// router := f.ctx.State.ProxyMap.Router
 	httpProxy, has := f.ctx.State.ProxyMap.Relations[key]
 	if !has {
 		return HttpProxyNotExistsError
 	}
-	return router.SetRateLimiter(httpProxy, limiterInfo)
+	return httpProxy.SetRateLimiter(limiterInfo)
 }
 
 func (f *FSM) doHandleAcl(logEntry LogEntryData) error {

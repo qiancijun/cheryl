@@ -45,13 +45,14 @@ func createRaftNode(conf *config.CherylConfig, ctx *StateContext) (*raftNodeInfo
 	}
 	raftConfig.LocalID = raft.ServerID(fmt.Sprintf("%s:%d", ip, conf.HttpPort))
 	// raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
-	raftConfig.SnapshotInterval = 10 * time.Second
-	raftConfig.SnapshotThreshold = 2
+	raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
+	raftConfig.SnapshotThreshold = conf.Raft.SnapshotThreshold
 	leaderNotify := make(chan bool, 1)
 	raftConfig.NotifyCh = leaderNotify
 	raftConfig.Logger = nil
-	raftConfig.HeartbeatTimeout = 5 * time.Second
-	raftConfig.ElectionTimeout = 5 * time.Second
+	raftConfig.LogLevel = conf.Raft.LogLevel
+	raftConfig.HeartbeatTimeout = time.Duration(conf.Raft.HeartbeatTimeout) * time.Second
+	raftConfig.ElectionTimeout = time.Duration(conf.Raft.ElectionTimeout) * time.Second
 
 	transport, err := newRaftTransport(conf)
 	if err != nil {
