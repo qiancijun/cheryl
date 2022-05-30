@@ -19,8 +19,6 @@ var (
 	once = &sync.Once{}
 )
 
-
-
 func GetRouterInstance(name string) Router {
 	if RouterSingleton == nil {
 		switch name {

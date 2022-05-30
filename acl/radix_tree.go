@@ -224,9 +224,9 @@ func (tree *RadixTree) AccessControl(ipAddress string) bool {
 	ipWithPort := strings.Split(ipAddress, ":")
 	ip := ipWithPort[0]
 	logger.Debugf("%s will access the system", ip)
-	ret := tree.Search(ip) == ""
+	ret := tree.Search(ip) != ""
 	if ret {
-		logger.Debugf("%s is forbidden to access system")
+		logger.Debugf("%s is forbidden to access system", ip)
 	}
 	return ret
 }

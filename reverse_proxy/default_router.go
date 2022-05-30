@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"com.cheryl/cheryl/acl"
+	"com.cheryl/cheryl/filter"
 	"com.cheryl/cheryl/logger"
 	"com.cheryl/cheryl/utils"
 )
@@ -38,7 +39,7 @@ func (r *DefaultRouter) HasPrefix(p string) bool {
 /*
 	执行方法的顺序：
 	1. 判断 ip 是否在黑名单内 （acl）
-	2. 执行一遍 FilterChain 的方法 （待做）
+	2. 执行一遍 FilterChain 的方法 
 	3. 根据 path 找到反向代理
 	4. 限流
 	5. 根据反向代理中的主机路径，进行负载均衡
@@ -47,9 +48,16 @@ func (r *DefaultRouter) HasPrefix(p string) bool {
 func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	logger.Infof("%s can't catch any path", req.URL)
 	// accessControlList
-	isPermit := acl.AccessControlList.AccessControl(utils.RemoteIp(req))
-	if !isPermit {
+	isDeny := acl.AccessControlList.AccessControl(utils.RemoteIp(req))
+	if isDeny {
 		w.WriteHeader(403)
+		return
+	}
+
+	// filterChain
+	err := filter.ExecuteFilterChain(w, req)
+	if err != nil {
+		w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -61,7 +69,7 @@ func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Rate Limit
-	err := httpProxy.invaildToken(Realpath)
+	err = httpProxy.invaildToken(Realpath)
 	if err != nil {
 		errMsg := fmt.Sprintf("route error: %s", err.Error())
 		logger.Debug(errMsg)
