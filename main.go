@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/consistence"
-	"com.cheryl/cheryl/filter"
-	"com.cheryl/cheryl/logger"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/consistence"
+	"github.com/qiancijun/cheryl/filter"
+	"github.com/qiancijun/cheryl/logger"
 )
 
 func filter1(w http.ResponseWriter, r *http.Request) error {

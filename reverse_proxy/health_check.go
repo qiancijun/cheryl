@@ -3,8 +3,8 @@ package reverseproxy
 import (
 	"time"
 
-	"com.cheryl/cheryl/logger"
-	"com.cheryl/cheryl/utils"
+	"github.com/qiancijun/cheryl/logger"
+	"github.com/qiancijun/cheryl/utils"
 )
 
 var HealthCheckTimeout = 5 * time.Second

@@ -1,7 +1,7 @@
 package consistence
 
 import (
-	reverseproxy "com.cheryl/cheryl/reverse_proxy"
+	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
 )
 
 type State struct {

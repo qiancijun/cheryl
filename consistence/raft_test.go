@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"com.cheryl/cheryl/config"
+	"github.com/qiancijun/cheryl/config"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"com.cheryl/cheryl/logger"
+	"github.com/qiancijun/cheryl/logger"
 	"gopkg.in/yaml.v3"
 )
 

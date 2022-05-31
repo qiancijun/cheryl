@@ -6,11 +6,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"com.cheryl/cheryl/acl"
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/logger"
-	ratelimit "com.cheryl/cheryl/rate_limit"
-	reverseproxy "com.cheryl/cheryl/reverse_proxy"
+	"github.com/qiancijun/cheryl/acl"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/logger"
+	ratelimit "github.com/qiancijun/cheryl/rate_limit"
+	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
 	"github.com/hashicorp/raft"
 	jsoniter "github.com/json-iterator/go"
 )

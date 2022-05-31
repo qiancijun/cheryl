@@ -3,8 +3,8 @@ package consistence
 import (
 	"io"
 
-	"com.cheryl/cheryl/acl"
-	reverseproxy "com.cheryl/cheryl/reverse_proxy"
+	"github.com/qiancijun/cheryl/acl"
+	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
 	"github.com/hashicorp/raft"
 	jsoniter "github.com/json-iterator/go"
 )

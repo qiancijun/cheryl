@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/logger"
-	"com.cheryl/cheryl/utils"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/logger"
+	"github.com/qiancijun/cheryl/utils"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
