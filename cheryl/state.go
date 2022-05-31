@@ -1,4 +1,4 @@
-package consistence
+package cheryl
 
 import (
 	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"

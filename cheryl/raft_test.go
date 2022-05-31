@@ -1,4 +1,4 @@
-package consistence
+package cheryl
 
 import (
 	"io/ioutil"

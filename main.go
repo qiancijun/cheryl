@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/qiancijun/cheryl/config"
-	"github.com/qiancijun/cheryl/consistence"
+	"github.com/qiancijun/cheryl/cheryl"
 	"github.com/qiancijun/cheryl/filter"
 	"github.com/qiancijun/cheryl/logger"
 )
@@ -49,6 +49,6 @@ func main() {
 
 	filter.CreateFilterChain(f1, f2, f3)
 
-	consistence.Start(config)
+	cheryl.Start(config)
 	// config.StartServer()
 }
