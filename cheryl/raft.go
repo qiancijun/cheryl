@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/qiancijun/cheryl/balancer"
 	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/logger"
 	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
 	"github.com/qiancijun/cheryl/utils"
-	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -112,16 +112,19 @@ func createProxyWithLocation(ctx *StateContext, l config.Location) {
 }
 
 func startRouter(ctx *StateContext, conf *config.CherylConfig) {
+	cfg := config.GetConfig()
 	r := http.NewServeMux()
 	// router := ctx.State.ProxyMap.Router
 	router := reverseproxy.GetRouterInstance(conf.RouterType)
 	r.Handle("/", router)
 	svr := http.Server{
 		// Addr:    fmt.Sprintf(":%d", conf.Port),
-		Handler: r,
-		ReadHeaderTimeout: 30,
+		Handler:           r,
+		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeout) * time.Second,
+		ReadTimeout:       time.Duration(cfg.ReadTimeout) * time.Second,
+		IdleTimeout:       time.Duration(cfg.IdleTimeout) * time.Second,
 	}
-	
+
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.Port))
 	if err != nil {
 		logger.Errorf("can't create listen on %d", conf.Port)

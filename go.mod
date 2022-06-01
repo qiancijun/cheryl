@@ -5,7 +5,6 @@ go 1.17
 require github.com/stretchr/testify v1.7.1
 
 require (
-	github.com/panjf2000/ants v1.3.0 // indirect
 	github.com/qiancijun/cheryl v0.0.0-20220531071321-82be94ca1f48 // indirect
 )
 

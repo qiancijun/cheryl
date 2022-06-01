@@ -46,6 +46,7 @@ func (r *DefaultRouter) HasPrefix(p string) bool {
 	6. 找出一个转发的主机，转发请求
 */
 func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	
 	logger.Infof("%s can't catch any path", req.URL)
 	defer req.Body.Close()
 	// accessControlList

@@ -3,28 +3,27 @@ package main
 import (
 	"flag"
 	"log"
-	"net/http"
 
 	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/cheryl"
-	"github.com/qiancijun/cheryl/filter"
-	"github.com/qiancijun/cheryl/logger"
+	// "github.com/qiancijun/cheryl/filter"
+	// "github.com/qiancijun/cheryl/logger"
 )
 
-func filter1(w http.ResponseWriter, r *http.Request) error {
-	logger.Debug("filter1")
-	return nil
-}
+// func filter1(w http.ResponseWriter, r *http.Request) error {
+// 	logger.Debug("filter1")
+// 	return nil
+// }
 
-func filter2(w http.ResponseWriter, r *http.Request) error {
-	logger.Debug("filter2")
-	return nil
-}
+// func filter2(w http.ResponseWriter, r *http.Request) error {
+// 	logger.Debug("filter2")
+// 	return nil
+// }
 
-func filter3(w http.ResponseWriter, r *http.Request) error {
-	logger.Debug("filter3")
-	return nil
-}
+// func filter3(w http.ResponseWriter, r *http.Request) error {
+// 	logger.Debug("filter3")
+// 	return nil
+// }
 
 
 

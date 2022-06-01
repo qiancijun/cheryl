@@ -32,6 +32,9 @@ type CherylConfig struct {
 	LogLevel          string     `yaml:"log_level"`
 	Raft              RaftConfig `yaml:"raft"`
 	RouterType        string     `yaml:"router_type"`
+	ReadHeaderTimeout int        `yaml:"read_header_timeout"`
+	ReadTimeout       int        `yaml:"read_timeout"`
+	IdleTimeout       int        `yaml:"idle_timeout"`
 }
 
 type Location struct {
@@ -46,7 +49,7 @@ type RaftConfig struct {
 	LeaderAddress     string `yaml:"leader_address"`
 	IsLeader          bool   `yaml:"leader"`
 	SnapshotInterval  int    `yaml:"snapshot_interval"`
-	SnapshotThreshold uint64    `yaml:"snapshot_threshold"`
+	SnapshotThreshold uint64 `yaml:"snapshot_threshold"`
 	LogLevel          string `yaml:"log_level"`
 	HeartbeatTimeout  int    `yaml:"heartbeat_timeout"`
 	ElectionTimeout   int    `yaml:"election_timeout"`
