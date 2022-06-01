@@ -121,6 +121,7 @@ func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm)
 }
 
 func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 	if !h.accessControl(utils.RemoteIp(r)) {
 		w.WriteHeader(403)
 		return
@@ -173,7 +174,9 @@ func (httpProxy *HTTPProxy) invaildToken(api string) error {
 	limiter := methods[api]
 	// 还未配置限流器，经过第一次访问之后，默认创建一个 qps 限流器
 	if limiter == nil {
+		httpProxy.Lock()
 		err := httpProxy.configRate(api)
+		httpProxy.Unlock()
 		return err
 	}
 	logger.Debugf("{invaildToken} method: %s 's limiter info: volumn: %d speed: %d", api, limiter.GetVolumn(), limiter.GetVolumn())
@@ -197,6 +200,7 @@ func (httpProxy *HTTPProxy) configRate(path string) error {
 	methods := httpProxy.Methods
 	_, has := methods[path]
 	if !has {
+		
 		// 默认创建一个 qps 限流器
 		limiter, err := ratelimit.Build("qps")
 		if err != nil {

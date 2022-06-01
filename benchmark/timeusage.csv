@@ -1,11 +1,9 @@
-software,requests,time usage
-nginx,100,0.662
-nginx,1000,2.039s
-nginx,10000,5.661s
-nginx,100000,12.569s
-nginx,1000000,56.709s
-cheryl,100,0.662
-cheryl,1000,2.039s
-cheryl,10000,5.661s
-cheryl,100000,12.569s
-cheryl,1000000,56.709s
+software,requests,吞吐量/sec
+nginx,100,109
+nginx,1000,826
+nginx,10000,1280
+nginx,100000,1133
+cheryl,100,109
+cheryl,1000,1063
+cheryl,10000,3955
+cheryl,100000,8089

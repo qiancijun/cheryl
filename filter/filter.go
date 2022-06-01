@@ -1,7 +1,6 @@
 package filter
 
 import (
-	"errors"
 	"net/http"
 )
 
@@ -13,7 +12,6 @@ type Filter struct {
 }
 
 var (
-	FilterChainNotExists = errors.New("has'n initialize the filter chain")
 	FilterChain *Filter
 )
 
@@ -42,7 +40,7 @@ func CreateFilterChain(filters... *Filter) {
 
 func ExecuteFilterChain(w http.ResponseWriter, r *http.Request) error {
 	if FilterChain == nil {
-		return FilterChainNotExists
+		return nil
 	}
 	var err error
 	root := FilterChain

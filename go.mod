@@ -5,6 +5,11 @@ go 1.17
 require github.com/stretchr/testify v1.7.1
 
 require (
+	github.com/panjf2000/ants v1.3.0 // indirect
+	github.com/qiancijun/cheryl v0.0.0-20220531071321-82be94ca1f48 // indirect
+)
+
+require (
 	github.com/armon/go-metrics v0.3.8 // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/hashicorp/go-hclog v0.9.1 // indirect
@@ -14,7 +19,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	golang.org/x/sys v0.0.0-20200122134326-e047566fdf82 // indirect
+	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 )
 
 require (

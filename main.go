@@ -7,7 +7,7 @@ import (
 
 	"com.cheryl/cheryl/config"
 	"com.cheryl/cheryl/consistence"
-	"com.cheryl/cheryl/filter"
+	// "com.cheryl/cheryl/filter"
 	"com.cheryl/cheryl/logger"
 )
 
@@ -43,11 +43,11 @@ func main() {
 		log.Fatalf("verify config error: %s", err)
 	}
 
-	f1 := filter.NewFilter(filter1)
-	f2 := filter.NewFilter(filter2)
-	f3 := filter.NewFilter(filter3)
+	// f1 := filter.NewFilter(filter1)
+	// f2 := filter.NewFilter(filter2)
+	// f3 := filter.NewFilter(filter3)
 
-	filter.CreateFilterChain(f1, f2, f3)
+	// filter.CreateFilterChain(f1, f2, f3)
 
 	consistence.Start(config)
 	// config.StartServer()

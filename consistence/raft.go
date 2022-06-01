@@ -117,15 +117,22 @@ func startRouter(ctx *StateContext, conf *config.CherylConfig) {
 	router := reverseproxy.GetRouterInstance(conf.RouterType)
 	r.Handle("/", router)
 	svr := http.Server{
-		Addr:    fmt.Sprintf(":%d", conf.Port),
+		// Addr:    fmt.Sprintf(":%d", conf.Port),
 		Handler: r,
+		ReadHeaderTimeout: 30,
 	}
+	
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", conf.Port))
+	if err != nil {
+		logger.Errorf("can't create listen on %d", conf.Port)
+	}
+
 	if conf.Schema == "http" {
-		if err := svr.ListenAndServe(); err != nil {
+		if err := svr.Serve(l); err != nil {
 			logger.Errorf("listen and serve error: %s", err)
 		}
 	} else if conf.Schema == "https" {
-		if err := svr.ListenAndServeTLS(conf.SSLCertificate, conf.SSLCertificateKey); err != nil {
+		if err := svr.ServeTLS(l, conf.SSLCertificate, conf.SSLCertificateKey); err != nil {
 			logger.Errorf("listen and serve error: %s", err)
 		}
 	}

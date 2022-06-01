@@ -47,6 +47,7 @@ func (r *DefaultRouter) HasPrefix(p string) bool {
 */
 func (r *DefaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	logger.Infof("%s can't catch any path", req.URL)
+	defer req.Body.Close()
 	// accessControlList
 	isDeny := acl.AccessControlList.AccessControl(utils.RemoteIp(req))
 	if isDeny {

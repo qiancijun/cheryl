@@ -118,7 +118,7 @@ func joinRaftCluster(conf *config.CherylConfig) error {
 	}
 	logger.Debug(string(body))
 	if string(body) != "ok" {
-		return fmt.Errorf("join cluster fail: %s", err.Error())
+		return fmt.Errorf("join cluster fail")
 	}
 	return nil
 }
