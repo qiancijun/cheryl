@@ -1,11 +1,11 @@
-package consistence
+package cheryl
 
 import (
 	"io/ioutil"
 	"net/http"
 	"testing"
 
-	"com.cheryl/cheryl/config"
+	"github.com/qiancijun/cheryl/config"
 	"github.com/stretchr/testify/assert"
 )
 

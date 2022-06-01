@@ -1,4 +1,4 @@
-package consistence
+package cheryl
 
 import (
 	"errors"
@@ -6,11 +6,11 @@ import (
 	"io"
 	"log"
 
-	"com.cheryl/cheryl/acl"
-	"com.cheryl/cheryl/balancer"
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/logger"
-	reverseproxy "com.cheryl/cheryl/reverse_proxy"
+	"github.com/qiancijun/cheryl/acl"
+	"github.com/qiancijun/cheryl/balancer"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/logger"
+	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
 	"github.com/hashicorp/raft"
 	jsoniter "github.com/json-iterator/go"
 )

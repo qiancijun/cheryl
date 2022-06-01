@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/consistence"
-	// "com.cheryl/cheryl/filter"
-	"com.cheryl/cheryl/logger"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/cheryl"
+	"github.com/qiancijun/cheryl/filter"
+	"github.com/qiancijun/cheryl/logger"
 )
 
 func filter1(w http.ResponseWriter, r *http.Request) error {
@@ -49,6 +49,6 @@ func main() {
 
 	// filter.CreateFilterChain(f1, f2, f3)
 
-	consistence.Start(config)
+	cheryl.Start(config)
 	// config.StartServer()
 }

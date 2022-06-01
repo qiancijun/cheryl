@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"sync"
 
-	"com.cheryl/cheryl/acl"
-	"com.cheryl/cheryl/filter"
-	"com.cheryl/cheryl/logger"
-	"com.cheryl/cheryl/utils"
+	"github.com/qiancijun/cheryl/acl"
+	"github.com/qiancijun/cheryl/filter"
+	"github.com/qiancijun/cheryl/logger"
+	"github.com/qiancijun/cheryl/utils"
 )
 
 // 使用哈希记录路由前缀

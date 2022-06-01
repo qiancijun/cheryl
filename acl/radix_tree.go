@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"com.cheryl/cheryl/logger"
-	"com.cheryl/cheryl/utils"
+	"github.com/qiancijun/cheryl/logger"
+	"github.com/qiancijun/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
 )
 

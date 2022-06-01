@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"com.cheryl/cheryl/acl"
-	"com.cheryl/cheryl/balancer"
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/logger"
-	ratelimit "com.cheryl/cheryl/rate_limit"
-	"com.cheryl/cheryl/utils"
+	"github.com/qiancijun/cheryl/acl"
+	"github.com/qiancijun/cheryl/balancer"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/logger"
+	ratelimit "github.com/qiancijun/cheryl/rate_limit"
+	"github.com/qiancijun/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
 )
 

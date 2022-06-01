@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"com.cheryl/cheryl/logger"
+	"github.com/qiancijun/cheryl/logger"
 )
 
 var ConnectionTimeout = 2 * time.Second

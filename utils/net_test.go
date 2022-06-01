@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	."com.cheryl/cheryl/utils"
+	."github.com/qiancijun/cheryl/utils"
 	"github.com/stretchr/testify/assert"
 )
 

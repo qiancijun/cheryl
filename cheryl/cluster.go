@@ -1,4 +1,4 @@
-package consistence
+package cheryl
 
 import (
 	"fmt"
@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/logger"
-	"com.cheryl/cheryl/utils"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/logger"
+	_"github.com/qiancijun/cheryl/utils"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
@@ -38,12 +38,13 @@ func newRaftTransport(conf *config.CherylConfig) (*raft.NetworkTransport, error)
 func createRaftNode(conf *config.CherylConfig, ctx *StateContext) (*raftNodeInfo, error) {
 	raftConfig := raft.DefaultConfig()
 	// raftConfig.LocalID = raft.ServerID(conf.Raft.RaftTCPAddress)
-	ip, err := utils.GetOutBoundIP()
-	if err != nil {
-		logger.Warnf("can't get local ip address: %s", err.Error())
-		ip = "0.0.0.0"
-	}
-	raftConfig.LocalID = raft.ServerID(fmt.Sprintf("%s:%d", ip, conf.HttpPort))
+	// ip, err := utils.GetOutBoundIP()
+	// if err != nil {
+	// 	logger.Warnf("can't get local ip address: %s", err.Error())
+	// 	ip = "0.0.0.0"
+	// }
+	// raftConfig.LocalID = raft.ServerID(fmt.Sprintf("%s:%d", ip, conf.HttpPort))
+	raftConfig.LocalID = raft.ServerID(conf.Name)
 	// raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
 	raftConfig.SnapshotInterval = time.Duration(conf.Raft.SnapshotInterval) * time.Second
 	raftConfig.SnapshotThreshold = conf.Raft.SnapshotThreshold

@@ -1,4 +1,4 @@
-module com.cheryl/cheryl
+module github.com/qiancijun/cheryl
 
 go 1.17
 

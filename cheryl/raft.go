@@ -1,4 +1,4 @@
-package consistence
+package cheryl
 
 import (
 	"fmt"
@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"com.cheryl/cheryl/balancer"
-	"com.cheryl/cheryl/config"
-	"com.cheryl/cheryl/logger"
-	reverseproxy "com.cheryl/cheryl/reverse_proxy"
-	"com.cheryl/cheryl/utils"
+	"github.com/qiancijun/cheryl/balancer"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/logger"
+	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
+	"github.com/qiancijun/cheryl/utils"
 	jsoniter "github.com/json-iterator/go"
 )
 

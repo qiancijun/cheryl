@@ -1,7 +1,7 @@
-package consistence
+package cheryl
 
 import (
-	"com.cheryl/cheryl/logger"
+	"github.com/qiancijun/cheryl/logger"
 	jsoniter "github.com/json-iterator/go"
 )
 
