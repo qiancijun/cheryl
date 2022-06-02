@@ -1,3 +1,4 @@
+[![License](https://img.shields.io/github/license/qiancijun/cheryl)](https://opensource.org/licenses/MIT)
 ![](https://qiancijun-images.oss-cn-beijing.aliyuncs.com/Cheryl.jpg?versionId=CAEQJhiBgICngf6IiRgiIGJkODVjOWExODEyZTQ1OTNhYjUwMTExYzNjZGY1ZTRk)
 
 # 介绍
