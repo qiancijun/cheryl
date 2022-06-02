@@ -50,6 +50,7 @@ func newHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/acl", s.doHandleAcl)
 	mux.HandleFunc("/getAcl", s.doGetAccessControlList)
 	mux.HandleFunc("/getRateLimiterType", s.doGetRateLimiterType)
+	mux.Handle("/", http.FileServer(http.Dir("static")))
 	return s
 }
 
