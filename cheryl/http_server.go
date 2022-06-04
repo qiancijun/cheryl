@@ -6,13 +6,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/raft"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/qiancijun/cheryl/acl"
 	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/logger"
 	ratelimit "github.com/qiancijun/cheryl/rate_limit"
 	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
-	"github.com/hashicorp/raft"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -47,9 +47,12 @@ func newHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/proxy", s.doGetProxy)
 	mux.HandleFunc("/methodInfo", s.doGetMehtodLimiter)
 	mux.HandleFunc("/addProxy", s.doAddProxy)
+	mux.HandleFunc("/addHost", s.doAddHost)
 	mux.HandleFunc("/acl", s.doHandleAcl)
 	mux.HandleFunc("/getAcl", s.doGetAccessControlList)
 	mux.HandleFunc("/getRateLimiterType", s.doGetRateLimiterType)
+	mux.HandleFunc("/removeProxy", s.doRemoveProxy)
+	mux.HandleFunc("/removeHost", s.doRemoveHost)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 	return s
 }
@@ -148,21 +151,21 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 	logger.Debugf("receive limiter info: %s", req)
 
 	// err := h.Ctx.State.ProxyMap.Router.SetRateLimiter(httpProxy, req.Info)
-	err := httpProxy.SetRateLimiter(req.Info)
-	if err != nil {
-		errMsg := fmt.Sprintf("can't set the %s%s RateLimiter: %s", req.Prefix, req.Info.PathName, err.Error())
-		logger.Warn(errMsg)
-		w.Write(Error(500, errMsg).Marshal())
-		return
-	}
-
 	// second: send logEntry to the raft cluster
-	err = h.Ctx.writeLogEntry(2, req.Prefix, "", config.Location{}, req.Info)
+	err := h.Ctx.writeLogEntry(2, req.Prefix, "", config.Location{}, req.Info)
 	if err != nil {
 		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
 		logger.Warn(errMsg)
 		ret := Error(500, errMsg)
 		w.Write(ret.Marshal())
+		return
+	}
+
+	err = httpProxy.SetRateLimiter(req.Info)
+	if err != nil {
+		errMsg := fmt.Sprintf("can't set the %s%s RateLimiter: %s", req.Prefix, req.Info.PathName, err.Error())
+		logger.Warn(errMsg)
+		w.Write(Error(500, errMsg).Marshal())
 		return
 	}
 
@@ -298,6 +301,30 @@ func (h *HttpServer) doAddProxy(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+func (h *HttpServer) doAddHost(w http.ResponseWriter, r *http.Request) {
+	type ReqData struct {
+		Pattern string `json:"pattern"`
+		Host    string `json:"host"`
+	}
+	var req ReqData
+	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
+		r.Body.Close()
+		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	err := h.Ctx.State.ProxyMap.AddProxy(req.Pattern, req.Host)
+	if err != nil {
+		w.Write(Error(500, err.Error()).Marshal())
+		return
+	}
+	w.Write(Ok().Marshal())
+}
+
+// TODO 先发送 LogEntry 再写入状态机
+
 func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
 	if !h.checkWritePermission() {
 		w.Write(Error(500, "write method not allowed").Marshal())
@@ -358,6 +385,52 @@ func (h *HttpServer) doGetAccessControlList(w http.ResponseWriter, r *http.Reque
 func (h *HttpServer) doGetRateLimiterType(w http.ResponseWriter, r *http.Request) {
 	ret := ratelimit.GetLimiterType()
 	w.Write(Ok().Put("list", ret).Marshal())
+}
+
+// TODO: WriteLogEntry
+func (h *HttpServer) doRemoveProxy(w http.ResponseWriter, r *http.Request) {
+	type ReqData struct {
+		Pattern string `json:"pattern"`
+	}
+	var req ReqData
+	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
+		r.Body.Close()
+		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	err := h.Ctx.State.ProxyMap.RemoveProxy(req.Pattern)
+	if err != nil {
+		w.Write(Error(500, err.Error()).Marshal())
+		return
+	}
+	w.Write(Ok().Marshal())
+}
+
+// TODO: WriteLogEntry
+func (h *HttpServer) doRemoveHost(w http.ResponseWriter, r *http.Request) {
+	type ReqData struct {
+		Pattern string `json:"pattern"`
+		Host    string `json:"host"`
+	}
+	var req ReqData
+	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
+		r.Body.Close()
+		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	err := h.Ctx.State.ProxyMap.RemoveHost(req.Pattern, req.Host)
+	if err != nil {
+		w.Write(Error(500, err.Error()).Marshal())
+		return
+	}
+	w.Write(Ok().Marshal())
+	return
 }
 
 func (h *HttpServer) checkWritePermission() bool {

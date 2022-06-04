@@ -5,7 +5,7 @@ http_port: 9119
 ssl_certificate:
 ssl_certificate_key:
 tcp_health_check: true
-log_level: error
+log_level: debug
 router_type: default
 read_header_timeout: 10
 read_timeout: 10

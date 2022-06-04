@@ -8,7 +8,6 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/qiancijun/cheryl/balancer"
 	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/logger"
 	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
@@ -99,12 +98,10 @@ func createProxy(ctx *StateContext, conf *config.CherylConfig) {
 }
 
 func createProxyWithLocation(ctx *StateContext, l config.Location) {
-	httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
+	err := ctx.State.ProxyMap.AddProxyWithLocation(l)
 	if err != nil {
 		logger.Errorf("create proxy error: %s", err)
 	}
-	ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
-	// httpProxy.HealthCheck()
 	err = ctx.writeLogEntry(1, l.Pattern, "", l, reverseproxy.LimiterInfo{})
 	if err != nil {
 		logger.Warnf("{createProxyWithLocation} write logEntry failed: %s", err.Error())

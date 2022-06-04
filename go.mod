@@ -5,10 +5,6 @@ go 1.17
 require github.com/stretchr/testify v1.7.1
 
 require (
-	github.com/qiancijun/cheryl v0.0.0-20220531071321-82be94ca1f48 // indirect
-)
-
-require (
 	github.com/armon/go-metrics v0.3.8 // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/hashicorp/go-hclog v0.9.1 // indirect

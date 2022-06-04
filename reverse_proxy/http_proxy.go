@@ -3,8 +3,6 @@ package reverseproxy
 import (
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -13,11 +11,9 @@ import (
 
 	"github.com/qiancijun/cheryl/acl"
 	"github.com/qiancijun/cheryl/balancer"
-	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/logger"
 	ratelimit "github.com/qiancijun/cheryl/rate_limit"
 	"github.com/qiancijun/cheryl/utils"
-	jsoniter "github.com/json-iterator/go"
 )
 
 const (
@@ -32,55 +28,25 @@ const (
 * 	alive: 反向代理的主机是否处于健康状态
  */
 type HTTPProxy struct {
-	HostMap  map[string]*httputil.ReverseProxy
-	Pattern  string
-	Lb       balancer.Balancer
-	Alive    map[string]bool
-	Methods  map[string]ratelimit.RateLimiter
-	ProxyMap *ProxyMap
+	HostMap       map[string]*httputil.ReverseProxy
+	Pattern       string
+	Lb            balancer.Balancer
+	Alive         map[string]bool
+	Methods       map[string]ratelimit.RateLimiter
+	HostsShutDown map[string]chan bool
+	ShutDown      chan bool
+	ProxyMap      *ProxyMap
 	sync.RWMutex
 }
 
-type ProxyMap struct {
-	sync.RWMutex
-	Relations map[string]*HTTPProxy `json:"-"`
-	Locations map[string]config.Location
-	Limiters  map[string][]LimiterInfo
-	Infos     Info
-}
 
-type Info struct {
-	RouterType string
-}
-
-type LimiterInfo struct {
-	PathName    string `json:"pathName"`
-	LimiterType string `json:"limiterType"`
-	Volumn      int    `json:"volumn"`    // 容量
-	Speed       int64  `json:"speed"`     // 速率
-	MaxThread   int    `json:"maxThread"` // 最大并发数量
-	Duration    int    `json:"duration"`  // 超时时间
-}
-
-func NewProxyMap() *ProxyMap {
-	// router := GetRouterInstance("default").(*DefaultRouter)
-	// router.acl = rt
-	return &ProxyMap{
-		Relations: make(map[string]*HTTPProxy),
-		// Router:    router,
-		Locations: make(map[string]config.Location),
-		Infos: Info{
-			RouterType: "default",
-		},
-		Limiters: make(map[string][]LimiterInfo),
-	}
-}
 
 // 对每一个 URL 创建反向代理并且记录到 URL 树中
 func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm) (*HTTPProxy, error) {
 	hostMap := make(map[string]*httputil.ReverseProxy)
 	alive := make(map[string]bool)
 	methods := make(map[string]ratelimit.RateLimiter)
+	hostsShutDown := make(map[string]chan bool)
 
 	hosts := make([]string, 0)
 	for _, targetHost := range targetHosts {
@@ -88,7 +54,7 @@ func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm)
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("%s has been created reverse proxy", url)
+		logger.Debugf("%s has been created reverse proxy", url)
 		proxy := httputil.NewSingleHostReverseProxy(url)
 
 		originDirector := proxy.Director
@@ -102,6 +68,7 @@ func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm)
 		alive[host] = true
 		hostMap[host] = proxy
 		hosts = append(hosts, host)
+		hostsShutDown[host] = make(chan bool, 0)
 		logger.Debugf("success create reverproxy %s", host)
 	}
 
@@ -111,14 +78,22 @@ func NewHTTPProxy(pattern string, targetHosts []string, algo balancer.Algorithm)
 		return nil, err
 	}
 
-	return &HTTPProxy{
+	httpProxy := &HTTPProxy{
 		HostMap: hostMap,
 		Lb:      lb,
 		Alive:   alive,
 		Pattern: pattern,
 		Methods: methods,
-	}, nil
+		ShutDown: make(chan bool),
+		HostsShutDown: hostsShutDown,
+	}
+
+	// 监听是否收到Shutdown
+	go httpProxy.shutDownCheck()
+
+	return httpProxy, nil
 }
+
 
 func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
@@ -140,7 +115,7 @@ func (h *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HTTPProxy) accessControl(ip string) bool {
-	logger.Debug("%s will access the system", ip)
+	logger.Debugf("%s will access the system", ip)
 	radixTree := acl.AccessControlList
 	ret := radixTree.Search(ip)
 	return ret == ""
@@ -200,7 +175,7 @@ func (httpProxy *HTTPProxy) configRate(path string) error {
 	methods := httpProxy.Methods
 	_, has := methods[path]
 	if !has {
-		
+
 		// 默认创建一个 qps 限流器
 		limiter, err := ratelimit.Build("qps")
 		if err != nil {
@@ -226,25 +201,14 @@ func (httpProxy *HTTPProxy) configRate(path string) error {
 	return nil
 }
 
-func (proxyMap *ProxyMap) Marshal() ([]byte, error) {
-	proxyMap.RLock()
-	defer proxyMap.RUnlock()
-	res, err := jsoniter.Marshal(proxyMap)
-	return res, err
-}
-
-func (proxyMap *ProxyMap) UnMarshal(serialized io.ReadCloser) error {
-	if err := jsoniter.NewDecoder(serialized).Decode(&proxyMap); err != nil {
-		return err
+func (httpProxy *HTTPProxy) shutDownCheck() {
+	select {
+	case <- httpProxy.ShutDown: 
+		// 关闭所有与 host 的心跳链接
+		for k, c := range httpProxy.HostsShutDown {
+			logger.Debugf("ready to close heartbeat for %s", k)
+			c <- true
+			logger.Debugf("close heatbeat for %s success", k)
+		}
 	}
-	return nil
-}
-
-func (proxyMap *ProxyMap) AddRelations(pattern string, proxy *HTTPProxy, location config.Location) {
-	proxy.ProxyMap = proxyMap
-	proxyMap.Relations[pattern] = proxy
-	proxy.ProxyMap.Locations[pattern] = location
-	// proxyMap.Router.Add(pattern, proxy)
-	RouterSingleton.Add(pattern, proxy)
-	proxy.HealthCheck()
 }
