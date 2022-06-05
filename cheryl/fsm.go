@@ -1,15 +1,14 @@
 package cheryl
 
 import (
+	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 
 	"github.com/hashicorp/raft"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/qiancijun/cheryl/acl"
-	"github.com/qiancijun/cheryl/balancer"
 	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/logger"
 	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
@@ -24,36 +23,29 @@ type FSM struct {
 	log *log.Logger
 }
 
-/**
-opt: 操作类型：
-
-*/
-type LogEntryData struct {
-	Opt         int
-	Key         string
-	Value       string
-	Location    config.Location
-	LimiterInfo reverseproxy.LimiterInfo
-}
-
 func (f *FSM) Apply(logEntry *raft.Log) interface{} {
-	e := LogEntryData{}
-
-	if err := jsoniter.Unmarshal(logEntry.Data, &e); err != nil {
-		errMsg := fmt.Sprintf("Failed unmarshaling Raft log entry. This is a bug. %s", err.Error())
-		logger.Warn(errMsg)
-		return err
-	}
+	data := logEntry.Data
+	
+	optType := binary.BigEndian.Uint16(data)
+	data = data[2:]	
+	
 	var ret interface{}
-	opt := e.Opt
-	logger.Debugf("FSM has received logEntry, optType: %d", opt)
-	switch opt {
-	case 1:
-		ret = f.doNewHttpProxy(e)
-	case 2:
-		ret = f.doSetRateLimiter(e)
-	case 3:
-		ret = f.doHandleAcl(e)
+	logger.Debugf("FSM has received logEntry, optType: %d", optType)
+	switch optType {
+	case uint16(1):
+		ret = f.doNewHttpProxy(data)
+	case uint16(2):
+		ret = f.doSetRateLimiter(data)
+	case uint16(3):
+		ret = f.doHandleAcl(data)
+	case uint16(4):
+		ret = f.doRemoveProxy(data)
+	case uint16(5):
+		ret = f.doRemoveHost(data)
+	case uint16(6):
+		ret = f.doAddHost(data)
+	default:
+		logger.Warnf("Unknown log entry type: %d", optType)
 	}
 	return ret
 }
@@ -84,14 +76,10 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 	logger.Debugf("{Restore} locations: %s", f.ctx.State.ProxyMap.Locations)
 	for _, l := range f.ctx.State.ProxyMap.Locations {
 		logger.Debugf("{Restore} found location: pattern: %s proxypass: %s balanceMode: %s", l.Pattern, l.ProxyPass, l.BalanceMode)
-		httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
+		err := f.ctx.State.ProxyMap.AddProxyWithLocation(l)
 		if err != nil {
-			logger.Errorf("create proxy error: %s", err)
-			return err
+			logger.Errorf("can't create proxy: %s", err.Error())
 		}
-		logger.Debugf("{doNewHttpProxy} add new httpProxy %s", l.Pattern)
-
-		f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
 	}
 
 	for key, limiters := range f.ctx.State.ProxyMap.Limiters {
@@ -114,49 +102,82 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 	return nil
 }
 
-func (f *FSM) doNewHttpProxy(logEntry LogEntryData) error {
+func (f *FSM) doNewHttpProxy(data []byte) error {
 	f.ctx.State.ProxyMap.Lock()
 	defer f.ctx.State.ProxyMap.Unlock()
-	key, l := logEntry.Key, logEntry.Location
-
-	if _, ok := f.ctx.State.ProxyMap.Relations[key]; ok {
-		logger.Debugf("{doNewHttpProxy} %s already exists in relations", key)
-		return nil
-	}
-	logger.Debugf("{doNewHttpProxy} receive new Log: %s, %s", key, l)
-	httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
-	if err != nil {
-		logger.Errorf("create proxy error: %s", err)
+	l := config.Location{}
+	if err := jsoniter.Unmarshal(data, &l); err != nil {
+		logger.Warnf("{doNewHttpProxy} can't resolve the data: %s", err.Error())
 		return err
 	}
-	f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
 
-	logger.Debugf("{doNewHttpProxy} add new httpProxy %s", key)
+	if _, ok := f.ctx.State.ProxyMap.Relations[l.Pattern]; ok {
+		logger.Debugf("{doNewHttpProxy} %s already exists in relations", l.Pattern)
+		return nil
+	}
+	logger.Debugf("{doNewHttpProxy} receive new Log: %s, %s", l.Pattern, l)
+	err := f.ctx.State.ProxyMap.AddProxyWithLocation(l)
+	if err != nil {
+		logger.Warnf("create proxy error: %s", err.Error())
+	}
+
+	logger.Debugf("{doNewHttpProxy} add new httpProxy %s", l.Pattern)
 	return nil
 }
 
-func (f *FSM) doSetRateLimiter(logEntry LogEntryData) error {
+func (f *FSM) doSetRateLimiter(data []byte) error {
 	f.ctx.State.ProxyMap.Lock()
 	defer f.ctx.State.ProxyMap.Unlock()
-	key, limiterInfo := logEntry.Key, logEntry.LimiterInfo
-	// router := f.ctx.State.ProxyMap.Router
-	httpProxy, has := f.ctx.State.ProxyMap.Relations[key]
+	info := reverseproxy.LimiterInfo{}
+	if err := jsoniter.Unmarshal(data, &info); err != nil {
+		logger.Warnf("can't set rate limiter")
+		return err
+	}
+	httpProxy, has := f.ctx.State.ProxyMap.Relations[info.Prefix]
 	if !has {
 		return HttpProxyNotExistsError
 	}
-	return httpProxy.SetRateLimiter(limiterInfo)
+	return httpProxy.SetRateLimiter(info)
 }
 
-func (f *FSM) doHandleAcl(logEntry LogEntryData) error {
-	ipNet, optType := logEntry.Key, logEntry.Value
-	if optType == "delete" {
+func (f *FSM) doHandleAcl(data []byte) error {
+	aclLog := AclLog{}
+	if err := jsoniter.Unmarshal(data, &aclLog); err != nil {
+		logger.Warnf("can't resolve aclLog")
+		return err
+	}
+	optType, ipNet := aclLog.Pattern, aclLog.IpAddress
+	if optType == 0 {
 		err := acl.AccessControlList.Delete(ipNet)
 		if err != nil {
 			return err
 		}
-	} else if optType == "insert" {
+	} else if optType == 1 {
 		err := acl.AccessControlList.Add(ipNet, ipNet)
 		return err
 	}
 	return nil
+}
+
+func (f *FSM) doRemoveProxy(data []byte) error {
+	proxy := string(data);
+	return f.ctx.State.ProxyMap.RemoveProxy(proxy)
+}
+
+func (f *FSM) doRemoveHost(data []byte) error {
+	removeHostLog := HostLog{}
+	if err := jsoniter.Unmarshal(data, &removeHostLog); err != nil {
+		logger.Warnf("can't resolve HostLog")
+		return err
+	}
+	return f.ctx.State.ProxyMap.RemoveHost(removeHostLog.Pattern, removeHostLog.Host)
+}
+
+func (f *FSM) doAddHost(data []byte) error {
+	addHostLog := HostLog{}
+	if err := jsoniter.Unmarshal(data, &addHostLog); err != nil {
+		logger.Warnf("can't resolve HostLog")
+		return err
+	}
+	return f.ctx.State.ProxyMap.AddProxy(addHostLog.Pattern, addHostLog.Host)
 }

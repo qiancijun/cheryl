@@ -127,44 +127,44 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 		w.Write(Error(500, "write method not allowed").Marshal())
 		return
 	}
-	type ReqData struct {
-		Prefix string                   `json:"prefix"`
-		Info   reverseproxy.LimiterInfo `json:"limiterInfo"`
-	}
-	var req ReqData
-	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
-		r.Body.Close()
+	var info reverseproxy.LimiterInfo
+	if err := jsoniter.NewDecoder(r.Body).Decode(&info); err != nil {
 		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
 		logger.Warn(errMsg)
 		ret := Error(500, errMsg)
 		w.Write(ret.Marshal())
 		return
 	}
+	data, err := jsoniter.Marshal(info)
+	if err != nil {
+		logger.Warnf("can't marshal json data: %s", err.Error())
+		w.WriteHeader(500)
+		return
+	}
+
 	// first: write in local, if success, send logEntry to the raft cluster
-	httpProxy, has := h.Ctx.State.ProxyMap.Relations[req.Prefix]
+	httpProxy, has := h.Ctx.State.ProxyMap.Relations[info.Prefix]
 	if !has {
-		errMsg := fmt.Sprintf("can't find the httpProxy: %s", req.Prefix)
+		errMsg := fmt.Sprintf("can't find the httpProxy: %s", info.Prefix)
 		logger.Warn(errMsg)
 		w.Write(Error(500, errMsg).Marshal())
 		return
 	}
-
-	logger.Debugf("receive limiter info: %v", req)
+	logger.Debugf("receive limiter info: %v", info)
 
 	// err := h.Ctx.State.ProxyMap.Router.SetRateLimiter(httpProxy, req.Info)
 	// second: send logEntry to the raft cluster
-	err := h.Ctx.writeLogEntry(2, req.Prefix, "", config.Location{}, req.Info)
-	if err != nil {
+	
+	if err = h.Ctx.writeLogEntry(2, data); err != nil {
 		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
 		logger.Warn(errMsg)
 		ret := Error(500, errMsg)
 		w.Write(ret.Marshal())
 		return
 	}
-
-	err = httpProxy.SetRateLimiter(req.Info)
-	if err != nil {
-		errMsg := fmt.Sprintf("can't set the %s%s RateLimiter: %s", req.Prefix, req.Info.PathName, err.Error())
+	
+	if err = httpProxy.SetRateLimiter(info); err != nil {
+		errMsg := fmt.Sprintf("can't set the %s%s RateLimiter: %s", info.Prefix, info.PathName, err.Error())
 		logger.Warn(errMsg)
 		w.Write(Error(500, errMsg).Marshal())
 		return
@@ -299,15 +299,10 @@ func (h *HttpServer) doAddProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	createProxyWithLocation(h.Ctx, location)
 	w.Write(Ok().Marshal())
-	return
 }
 
 func (h *HttpServer) doAddHost(w http.ResponseWriter, r *http.Request) {
-	type ReqData struct {
-		Pattern string `json:"pattern"`
-		Host    string `json:"host"`
-	}
-	var req ReqData
+	var req HostLog
 	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
 		r.Body.Close()
 		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
@@ -316,66 +311,73 @@ func (h *HttpServer) doAddHost(w http.ResponseWriter, r *http.Request) {
 		w.Write(ret.Marshal())
 		return
 	}
-	err := h.Ctx.State.ProxyMap.AddProxy(req.Pattern, req.Host)
+	data, err := jsoniter.Marshal(req)
 	if err != nil {
+		errMsg := fmt.Sprintf("can't resolve json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	
+	if err = h.Ctx.State.ProxyMap.AddProxy(req.Pattern, req.Host); err != nil {
 		w.Write(Error(500, err.Error()).Marshal())
+		return
+	}
+	if err = h.Ctx.writeLogEntry(6, data); err != nil {
+		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
 		return
 	}
 	w.Write(Ok().Marshal())
 }
-
-// TODO 先发送 LogEntry 再写入状态机
 
 func (h *HttpServer) doHandleAcl(w http.ResponseWriter, r *http.Request) {
 	if !h.checkWritePermission() {
 		w.Write(Error(500, "write method not allowed").Marshal())
 		return
 	}
-	type ReqData struct {
-		Type      int    `json:"type"`
-		IpAddress string `json:"ipAddress"`
-	}
-	var req ReqData
+
+	var req AclLog
 	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
-		r.Body.Close()
-		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warnf("can't resolve json data: %s", err.Error())
+		w.WriteHeader(400)
+		return
+	}
+
+	data, err := jsoniter.Marshal(req)
+	if err != nil {
+		errMsg := fmt.Sprintf("can't resolve json data: %s", err.Error())
 		logger.Warn(errMsg)
 		ret := Error(500, errMsg)
 		w.Write(ret.Marshal())
 		return
 	}
-	logger.Debugf("{doHandleAcl} receive opt type: %d, ipAddress: %s", req.Type, req.IpAddress)
-	if req.Type == 0 {
+	logger.Debugf("{doHandleAcl} receive opt type: %d, ipAddress: %s", req.Pattern, req.IpAddress)
+	if req.Pattern == 0 {
 		// delete
-		if err := acl.AccessControlList.Delete(req.IpAddress); err != nil {
+		err = acl.AccessControlList.Delete(req.IpAddress)
+		if err != nil {
 			w.Write(Error(500, err.Error()).Marshal())
-		} else {
-			err := h.Ctx.writeLogEntry(3, req.IpAddress, "delete", config.Location{}, reverseproxy.LimiterInfo{})
-			if err != nil {
-				errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
-				logger.Warn(errMsg)
-				ret := Error(500, errMsg)
-				w.Write(ret.Marshal())
-				return
-			}
-			w.Write(Ok().Marshal())
+			return
 		}
 	} else {
-		// add
-		if err := acl.AccessControlList.Add(req.IpAddress, req.IpAddress); err != nil {
+		err = acl.AccessControlList.Add(req.IpAddress, req.IpAddress)
+		if err != nil {
 			w.Write(Error(500, err.Error()).Marshal())
-		} else {
-			err := h.Ctx.writeLogEntry(3, req.IpAddress, "insert", config.Location{}, reverseproxy.LimiterInfo{})
-			if err != nil {
-				errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
-				logger.Warn(errMsg)
-				ret := Error(500, errMsg)
-				w.Write(ret.Marshal())
-				return
-			}
-			w.Write(Ok().Marshal())
+			return
 		}
 	}
+	if err := h.Ctx.writeLogEntry(3, data); err != nil {
+		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	w.Write(Ok().Marshal())
 }
 
 func (h *HttpServer) doGetAccessControlList(w http.ResponseWriter, r *http.Request) {
@@ -388,7 +390,6 @@ func (h *HttpServer) doGetRateLimiterType(w http.ResponseWriter, r *http.Request
 	w.Write(Ok().Put("list", ret).Marshal())
 }
 
-// TODO: WriteLogEntry
 func (h *HttpServer) doRemoveProxy(w http.ResponseWriter, r *http.Request) {
 	type ReqData struct {
 		Pattern string `json:"pattern"`
@@ -407,16 +408,18 @@ func (h *HttpServer) doRemoveProxy(w http.ResponseWriter, r *http.Request) {
 		w.Write(Error(500, err.Error()).Marshal())
 		return
 	}
+	if err := h.Ctx.writeLogEntry(4, []byte(req.Pattern)); err != nil {
+		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
 	w.Write(Ok().Marshal())
 }
 
-// TODO: WriteLogEntry
 func (h *HttpServer) doRemoveHost(w http.ResponseWriter, r *http.Request) {
-	type ReqData struct {
-		Pattern string `json:"pattern"`
-		Host    string `json:"host"`
-	}
-	var req ReqData
+	var req HostLog
 	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
 		r.Body.Close()
 		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
@@ -425,9 +428,26 @@ func (h *HttpServer) doRemoveHost(w http.ResponseWriter, r *http.Request) {
 		w.Write(ret.Marshal())
 		return
 	}
-	err := h.Ctx.State.ProxyMap.RemoveHost(req.Pattern, req.Host)
+
+	data, err := jsoniter.Marshal(req)
 	if err != nil {
+		errMsg := fmt.Sprintf("can't resolve json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+	
+	if err = h.Ctx.State.ProxyMap.RemoveHost(req.Pattern, req.Host); err != nil {
 		w.Write(Error(500, err.Error()).Marshal())
+		return
+	}
+	
+	if err = h.Ctx.writeLogEntry(5, data); err != nil {
+		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
 		return
 	}
 	w.Write(Ok().Marshal())

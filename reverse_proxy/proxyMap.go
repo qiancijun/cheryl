@@ -30,6 +30,7 @@ type Info struct {
 }
 
 type LimiterInfo struct {
+	Prefix      string `json:"prefix"`
 	PathName    string `json:"pathName"`
 	LimiterType string `json:"limiterType"`
 	Volumn      int    `json:"volumn"`    // 容量

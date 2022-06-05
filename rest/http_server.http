@@ -18,14 +18,12 @@ content-type: application/json
 
 {
     "prefix": "/api",
-    "limiterInfo": {
-        "pathName": "/index",
-        "limiterType": "qps",
-        "volumn": 1,
-        "speed": 1,
-        "duration": 500,
-        "maxThread": -1
-    }
+    "pathName": "/index",
+    "limiterType": "qps",
+    "volumn": 1,
+    "speed": 1,
+    "duration": 500,
+    "maxThread": -1
 };
 ###
 GET http://localhost/api/index
@@ -62,7 +60,7 @@ POST http://localhost:9119/acl
 Content-Type: application/json
 
 {
-    "type": 0,
+    "pattern": 0,
     "ipAddress": "127.0.0.1/32"
 }
 ###

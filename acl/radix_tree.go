@@ -163,8 +163,10 @@ func (tree *RadixTree) Delete(ipNet string) error {
 	ret := tree.delete(ip, netMask)
 	if ret {
 		delete(tree.Record, ipNet)
+		logger.Debugf("{ACL} delete ip address %s success", ipNet)
 		return nil
 	}
+	logger.Debugf("{ACL} can't find ip address %s", ipNet)
 	return CantFindIpNet
 }
 

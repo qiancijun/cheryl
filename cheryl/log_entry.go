@@ -10,6 +10,16 @@ type LogEntry struct {
 	Data []byte
 }
 
+type AclLog struct {
+	Pattern   byte
+	IpAddress string
+}
+
+type HostLog struct {
+	Pattern string
+	Host    string
+}
+
 func (l *LogEntry) Encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := binary.Write(buf, binary.BigEndian, l.Opt); err != nil {
