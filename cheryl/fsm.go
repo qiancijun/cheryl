@@ -6,13 +6,13 @@ import (
 	"io"
 	"log"
 
+	"github.com/hashicorp/raft"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/qiancijun/cheryl/acl"
 	"github.com/qiancijun/cheryl/balancer"
 	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/logger"
 	reverseproxy "github.com/qiancijun/cheryl/reverse_proxy"
-	"github.com/hashicorp/raft"
-	jsoniter "github.com/json-iterator/go"
 )
 
 var (
@@ -36,7 +36,6 @@ type LogEntryData struct {
 	LimiterInfo reverseproxy.LimiterInfo
 }
 
-// Apply applies a Raft log entry to the key-value store.
 func (f *FSM) Apply(logEntry *raft.Log) interface{} {
 	e := LogEntryData{}
 
@@ -61,7 +60,7 @@ func (f *FSM) Apply(logEntry *raft.Log) interface{} {
 
 func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
 	return &snapshot{
-		ProxyMap: f.ctx.State.ProxyMap, 
+		ProxyMap:  f.ctx.State.ProxyMap,
 		RadixTree: acl.AccessControlList,
 	}, nil
 }
@@ -91,13 +90,15 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 			return err
 		}
 		logger.Debugf("{doNewHttpProxy} add new httpProxy %s", l.Pattern)
-		
+
 		f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
 	}
 
 	for key, limiters := range f.ctx.State.ProxyMap.Limiters {
 		httpProxy, has := f.ctx.State.ProxyMap.Relations[key]
-		if !has { continue }
+		if !has {
+			continue
+		}
 		for _, limiter := range limiters {
 			// add methods to ProxyMap, then set rate limiter
 			httpProxy.SetRateLimiter(limiter)
@@ -112,60 +113,6 @@ func (f *FSM) Restore(serialized io.ReadCloser) error {
 	}
 	return nil
 }
-// func (f *FSM) Restore(serialized io.ReadCloser) error {
-// 	logger.Debug("found snapshot file, ready to restore")
-
-// 	var s *snapshot
-// 	err := s.UnMarshal(serialized)
-// 	if err != nil {
-// 		logger.Errorf("can't restore State: %s", err.Error())
-// 		return err
-// 	}
-// 	proxyMap := s.ProxyMap
-// 	rt := s.RadixTree
-
-// 	f.ctx.State.ProxyMap.Relations = make(map[string]*reverseproxy.HTTPProxy)
-// 	// err := f.ctx.State.ProxyMap.UnMarshal(serialized)
-// 	// if err != nil {
-// 	// 	logger.Errorf("can't restore State: %s", err.Error())
-// 	// 	return err
-// 	}
-
-// 	router := f.ctx.State.ProxyMap.Router
-// 	logger.Debugf("{Restore} locations: %s", f.ctx.State.ProxyMap.Locations)
-// 	for _, l := range f.ctx.State.ProxyMap.Locations {
-// 		logger.Debugf("{Restore} found location: pattern: %s proxypass: %s balanceMode: %s", l.Pattern, l.ProxyPass, l.BalanceMode)
-// 		httpProxy, err := reverseproxy.NewHTTPProxy(l.Pattern, l.ProxyPass, balancer.Algorithm(l.BalanceMode))
-// 		if err != nil {
-// 			logger.Errorf("create proxy error: %s", err)
-// 			return err
-// 		}
-// 		logger.Debugf("{doNewHttpProxy} add new httpProxy %s", l.Pattern)
-		
-// 		f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
-// 	}
-
-// 	for key, limiters := range f.ctx.State.ProxyMap.Limiters {
-// 		httpProxy, has := f.ctx.State.ProxyMap.Relations[key]
-// 		if !has { continue }
-// 		for _, limiter := range limiters {
-// 			// add methods to ProxyMap, then set rate limiter
-// 			router.SetRateLimiter(httpProxy, limiter)
-// 		}
-// 	}
-
-// 	err = acl.AccessControlList.UnMarshal(serialized)
-// 	if err != nil {
-// 		logger.Errorf("can't restore AccessControlList: %s", err.Error())
-// 		return err
-// 	}
-
-// 	for key := range acl.AccessControlList.Record {
-// 		logger.Debugf("{Restore} acl key: %s", key)
-// 		acl.AccessControlList.Add(key, key)
-// 	}
-// 	return nil
-// }
 
 func (f *FSM) doNewHttpProxy(logEntry LogEntryData) error {
 	f.ctx.State.ProxyMap.Lock()
@@ -183,7 +130,7 @@ func (f *FSM) doNewHttpProxy(logEntry LogEntryData) error {
 		return err
 	}
 	f.ctx.State.ProxyMap.AddRelations(l.Pattern, httpProxy, l)
-	
+
 	logger.Debugf("{doNewHttpProxy} add new httpProxy %s", key)
 	return nil
 }

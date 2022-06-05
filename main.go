@@ -4,10 +4,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/cheryl"
-	// "github.com/qiancijun/cheryl/filter"
-	// "github.com/qiancijun/cheryl/logger"
+	"github.com/qiancijun/cheryl/config"
 )
 
 // func filter1(w http.ResponseWriter, r *http.Request) error {
@@ -24,8 +22,6 @@ import (
 // 	logger.Debug("filter3")
 // 	return nil
 // }
-
-
 
 func main() {
 

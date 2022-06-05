@@ -36,7 +36,7 @@ func Start(conf *config.CherylConfig) {
 	// 在本地端口开启 http 监听
 	httpListen, err := createListener(conf.HttpPort)
 	if err != nil {
-		logger.Errorf("listen %s failed", conf.HttpPort)
+		logger.Errorf("listen %d failed", conf.HttpPort)
 	}
 
 	// 创建 http Server
@@ -64,7 +64,7 @@ func Start(conf *config.CherylConfig) {
 	// 监听 leader
 	go func() {
 		for leader := range state.RaftNode.leaderNotifych {
-			if leader && conf.Raft.IsLeader {
+			if leader || conf.Raft.IsLeader {
 				if !init {
 					logger.Debugf("the node %s is first time start, ready create Proxy from config", conf.Name)
 					createProxy(stateContext, conf)
@@ -73,7 +73,7 @@ func Start(conf *config.CherylConfig) {
 				logger.Debug("become leader, enable write api")
 			} else {
 				logger.Debug("become follower, disable write api")
-				httpServer.SetWriteFlag(true)
+				httpServer.SetWriteFlag(false)
 			}
 		}
 	}()

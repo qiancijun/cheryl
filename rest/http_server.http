@@ -88,3 +88,13 @@ Content-Type: application/json
     "pattern": "/api",
     "host": "http://localhost:8081"
 }
+###
+GET http://localhost/api/person?name=Cheryl&age=18
+###
+POST http://localhost/api/people
+Content-Type: application/json
+
+{
+    "name": "Cheryl",
+    "age": 18
+}

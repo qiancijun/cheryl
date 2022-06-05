@@ -60,6 +60,7 @@ func newHttpServer(ctx *StateContext) *HttpServer {
 func (h *HttpServer) doJoin(w http.ResponseWriter, r *http.Request) {
 	variables := r.URL.Query()
 	peerAddress := variables.Get("peerAddress")
+	name := variables.Get("name")
 	if peerAddress == "" {
 		errMsg := "doJoin: invaild peerAddress"
 		logger.Info(errMsg)
@@ -67,7 +68,7 @@ func (h *HttpServer) doJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logger.Debugf("peerAddress %s will join the cluster", peerAddress)
-	addPeerFuture := h.Ctx.State.RaftNode.Raft.AddVoter(raft.ServerID(peerAddress), raft.ServerAddress(peerAddress), 0, 0)
+	addPeerFuture := h.Ctx.State.RaftNode.Raft.AddVoter(raft.ServerID(name), raft.ServerAddress(peerAddress), 0, 0)
 	if err := addPeerFuture.Error(); err != nil {
 		errMsg := fmt.Sprintf("Error joining peer to raft, peeraddress:%s, err:%v, code:%d", peerAddress, err, http.StatusInternalServerError)
 		logger.Warn(errMsg)
@@ -148,7 +149,7 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Debugf("receive limiter info: %s", req)
+	logger.Debugf("receive limiter info: %v", req)
 
 	// err := h.Ctx.State.ProxyMap.Router.SetRateLimiter(httpProxy, req.Info)
 	// second: send logEntry to the raft cluster

@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/qiancijun/cheryl/config"
-	"github.com/qiancijun/cheryl/logger"
-	_"github.com/qiancijun/cheryl/utils"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
+	"github.com/qiancijun/cheryl/config"
+	"github.com/qiancijun/cheryl/logger"
+	_ "github.com/qiancijun/cheryl/utils"
 )
 
 type raftNodeInfo struct {
@@ -107,7 +107,7 @@ func createRaftNode(conf *config.CherylConfig, ctx *StateContext) (*raftNodeInfo
 }
 
 func joinRaftCluster(conf *config.CherylConfig) error {
-	url := fmt.Sprintf("http://%s/join?peerAddress=%s", conf.Raft.LeaderAddress, conf.Raft.RaftTCPAddress)
+	url := fmt.Sprintf("http://%s/join?peerAddress=%s&name=%s", conf.Raft.LeaderAddress, conf.Raft.RaftTCPAddress, conf.Name)
 	response, err := http.Get(url)
 	if err != nil {
 		return err

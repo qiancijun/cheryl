@@ -18,12 +18,12 @@ raft:
   snapshot_interval: 20
   snapshot_threshold: 1
   log_level: info
-  heartbeat_timeout: 10
-  election_timeout: 10
+  heartbeat_timeout: 5
+  election_timeout: 5
 location:                         # route matching for reverse proxy
   - pattern: /api
     proxy_pass:                   # URL of the reverse proxy
     - "http://localhost:8080"
-    - "http://localhost:8081"
+    # - "http://localhost:8081"
     # - "http://my-server.com"
     balance_mode: round-robin     # load balancing algorithm
