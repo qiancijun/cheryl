@@ -12,6 +12,7 @@ type Balancer interface {
 	Inc(string)
 	Done(string)
 	Len() int
+	Mode() string
 }
 
 type Factory func([]string) Balancer

@@ -79,3 +79,5 @@ func (c *ConsistenceHash) Inc(_ string) {}
 func (c *ConsistenceHash) Done(_ string) {}
 
 func (c *ConsistenceHash) Len() int { return len(c.hosts) }
+
+func (c *ConsistenceHash) Mode() string { return "consistence-hash" }

@@ -60,3 +60,5 @@ func (r *RoundRobin) Inc(_ string) {}
 func (r *RoundRobin) Done(_ string) {}
 
 func (r *RoundRobin) Len() int { return len(r.hosts) }
+
+func (r *RoundRobin) Mode() string { return "round-robin" }
