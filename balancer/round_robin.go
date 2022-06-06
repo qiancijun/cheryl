@@ -58,3 +58,5 @@ func (r *RoundRobin) Inc(_ string) {}
 
 // Done .
 func (r *RoundRobin) Done(_ string) {}
+
+func (r *RoundRobin) Len() int { return len(r.hosts) }

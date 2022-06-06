@@ -21,20 +21,21 @@ var (
 )
 
 type CherylConfig struct {
-	Name              string     `yaml:"name"`
-	SSLCertificateKey string     `yaml:"ssl_certificate_key"`
-	Location          []Location `yaml:"location"`
-	Schema            string     `yaml:"schema"`
-	Port              int        `yaml:"port"`
-	HttpPort          int        `yaml:"http_port"`
-	SSLCertificate    string     `yaml:"ssl_certificate"`
-	HealthCheck       bool       `yaml:"tcp_health_check"`
-	LogLevel          string     `yaml:"log_level"`
-	Raft              RaftConfig `yaml:"raft"`
-	RouterType        string     `yaml:"router_type"`
-	ReadHeaderTimeout int        `yaml:"read_header_timeout"`
-	ReadTimeout       int        `yaml:"read_timeout"`
-	IdleTimeout       int        `yaml:"idle_timeout"`
+	Name              string      `yaml:"name"`
+	SSLCertificateKey string      `yaml:"ssl_certificate_key"`
+	Location          []Location  `yaml:"location"`
+	Schema            string      `yaml:"schema"`
+	Port              int         `yaml:"port"`
+	HttpPort          int         `yaml:"http_port"`
+	SSLCertificate    string      `yaml:"ssl_certificate"`
+	HealthCheck       bool        `yaml:"tcp_health_check"`
+	LogLevel          string      `yaml:"log_level"`
+	Raft              RaftConfig  `yaml:"raft"`
+	RouterType        string      `yaml:"router_type"`
+	ReadHeaderTimeout int         `yaml:"read_header_timeout"`
+	ReadTimeout       int         `yaml:"read_timeout"`
+	IdleTimeout       int         `yaml:"idle_timeout"`
+	LoadBalance       LoadBalance `yaml:"load_balance"`
 }
 
 type Location struct {
@@ -53,6 +54,10 @@ type RaftConfig struct {
 	LogLevel          string `yaml:"log_level"`
 	HeartbeatTimeout  int    `yaml:"heartbeat_timeout"`
 	ElectionTimeout   int    `yaml:"election_timeout"`
+}
+
+type LoadBalance struct {
+	Replicas int `yaml:"replicas"`
 }
 
 var config *CherylConfig

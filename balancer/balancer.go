@@ -11,6 +11,7 @@ type Balancer interface {
 	Balance(string) (string, error)
 	Inc(string)
 	Done(string)
+	Len() int
 }
 
 type Factory func([]string) Balancer
@@ -27,4 +28,12 @@ func Build(algo Algorithm, hosts []string) (Balancer, error) {
 		return nil, AlgorithmNotSupportedError
 	}
 	return factory(hosts), nil
+}
+
+func GetBalancerType() []string {
+	res := make([]string, 0)
+	for k := range factories {
+		res = append(res, string(k))
+	}
+	return res
 }

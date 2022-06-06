@@ -10,6 +10,8 @@ router_type: default
 read_header_timeout: 10
 read_timeout: 10
 idle_timeout: 10
+load_balance:
+  replicas: 3
 raft:
   data_dir: ./data
   tcp_address: 127.0.0.1:7000

@@ -216,7 +216,7 @@ func (tree *RadixTree) delete(key uint32, mask uint32) bool {
 
 func (tree *RadixTree) GetBlackList() []string {
 	res := make([]string, 0)
-	for k, _ := range tree.Record {
+	for k := range tree.Record {
 		res = append(res, k)
 	}
 	return res
