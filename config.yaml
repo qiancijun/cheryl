@@ -5,7 +5,7 @@ http_port: 9119
 ssl_certificate:
 ssl_certificate_key:
 tcp_health_check: true
-log_level: debug
+log_level: info
 router_type: default
 read_header_timeout: 10
 read_timeout: 10
@@ -19,13 +19,13 @@ raft:
   leader_address: 127.0.0.1:9119
   snapshot_interval: 20
   snapshot_threshold: 1
-  log_level: info
+  log_level: error
   heartbeat_timeout: 5
   election_timeout: 5
 location:                         # route matching for reverse proxy
   - pattern: /api
     proxy_pass:                   # URL of the reverse proxy
     - "http://localhost:8080"
-    # - "http://localhost:8081"
+    - "http://localhost:8081"
     # - "http://my-server.com"
     balance_mode: round-robin     # load balancing algorithm

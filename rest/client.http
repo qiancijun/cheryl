@@ -1,0 +1,8 @@
+###
+GET http://localhost/api/hello
+###
+GET http://localhost/test/hello
+###
+GET http://localhost/api/index
+###
+GET http://localhost:81/api/index

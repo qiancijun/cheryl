@@ -1,9 +1,0 @@
-software,requests,吞吐量/sec
-nginx,100,109
-nginx,1000,826
-nginx,10000,1280
-nginx,100000,1133
-cheryl,100,109
-cheryl,1000,1063
-cheryl,10000,3955
-cheryl,100000,8089

@@ -16,6 +16,7 @@ import (
 
 var (
 	LeaderCheckTimeout = 10 * time.Second
+	Context *State
 )
 
 func Start(conf *config.CherylConfig) {
@@ -26,6 +27,7 @@ func Start(conf *config.CherylConfig) {
 	state := &State{
 		ProxyMap: proxyMap,
 	}
+	Context = state
 
 	stateContext := &StateContext{
 		State: state,
@@ -142,25 +144,6 @@ func startRouter(ctx *StateContext, conf *config.CherylConfig) {
 		}
 	}
 }
-
-// func (ctx *StateContext) writeLogEntry(opt int, key string, value string, location config.Location, limiterInfo reverseproxy.LimiterInfo) error {
-// 	event := LogEntryData{opt, key, value, location, limiterInfo}
-// 	logger.Debugf("{writeLogEntry} the new event: %s %v", key, value)
-// 	eventBytes, err := jsoniter.Marshal(event)
-// 	if err != nil {
-// 		logger.Warnf("{writeLogEntry} json marshal failed: %s", err.Error())
-// 		return err
-// 	}
-// 	logger.Debugf("{writeLogEntry} marshal log success %s", string(eventBytes))
-// 	applyFuture := ctx.State.RaftNode.Raft.Apply(eventBytes, 5*time.Second)
-// 	if err := applyFuture.Error(); err != nil {
-// 		logger.Warnf("raft apply failed: %s", err.Error())
-// 		return err
-// 	}
-// 	idx := applyFuture.Index()
-// 	logger.Debugf("the new raft index: %d", idx)
-// 	return nil
-// }
 
 func (ctx *StateContext) writeLogEntry(optType uint16, data []byte) error {
 	event := LogEntry{optType, data}
