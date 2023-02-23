@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/raft"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/qiancijun/cheryl/acl"
+	"github.com/qiancijun/cheryl/balancer"
 	"github.com/qiancijun/cheryl/config"
 	"github.com/qiancijun/cheryl/logger"
 	ratelimit "github.com/qiancijun/cheryl/rate_limit"
@@ -53,6 +54,8 @@ func newHttpServer(ctx *StateContext) *HttpServer {
 	mux.HandleFunc("/getRateLimiterType", s.doGetRateLimiterType)
 	mux.HandleFunc("/removeProxy", s.doRemoveProxy)
 	mux.HandleFunc("/removeHost", s.doRemoveHost)
+	mux.HandleFunc("/balancerMode", s.doGetBalancerMode)
+	mux.HandleFunc("/changeLb", s.doChangeLb)
 	mux.Handle("/", http.FileServer(http.Dir("static")))
 	return s
 }
@@ -154,7 +157,7 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 
 	// err := h.Ctx.State.ProxyMap.Router.SetRateLimiter(httpProxy, req.Info)
 	// second: send logEntry to the raft cluster
-	
+
 	if err = h.Ctx.writeLogEntry(2, data); err != nil {
 		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
 		logger.Warn(errMsg)
@@ -162,7 +165,7 @@ func (h *HttpServer) doSetRateLimiter(w http.ResponseWriter, r *http.Request) {
 		w.Write(ret.Marshal())
 		return
 	}
-	
+
 	if err = httpProxy.SetRateLimiter(info); err != nil {
 		errMsg := fmt.Sprintf("can't set the %s%s RateLimiter: %s", info.Prefix, info.PathName, err.Error())
 		logger.Warn(errMsg)
@@ -217,22 +220,34 @@ func (h *HttpServer) doGetInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write(Ok().Put("info", res).Marshal())
 }
 
+/*
+{
+	"/api": {
+		"balance_mode": "round-robin",
+		"hosts": [];
+	}
+}
+*/
 func (h *HttpServer) doGetProxy(w http.ResponseWriter, r *http.Request) {
-	type Response struct {
+	type host struct {
 		Host  string `json:"host"`
 		Alive bool   `json:"alive"`
 	}
-	res := make(map[string][]Response)
-	relations := h.Ctx.State.ProxyMap.Relations
-	for k, v := range relations {
-		hostMap := v.HostMap
-		alive := v.Alive
-		res[k] = make([]Response, 0)
-		for host := range hostMap {
-			res[k] = append(res[k], Response{host, alive[host]})
-		}
+	type Response struct {
+		BalancerMode string `json:"balancerMode"`
+		Hosts        []host `json:"hosts"`
 	}
-	w.Write(Ok().Put("data", res).Marshal())
+	data := make(map[string]Response)
+	for k, v := range h.Ctx.State.ProxyMap.Relations {
+		proxy := Response{}
+		proxy.BalancerMode = v.Lb.Mode()
+		proxy.Hosts = make([]host, 0)
+		for h := range v.HostMap {
+			proxy.Hosts = append(proxy.Hosts, host{h, v.Alive[h]})
+		}
+		data[k] = proxy
+	}
+	w.Write(Ok().Put("data", data).Marshal())
 }
 
 func (h *HttpServer) doGetMehtodLimiter(w http.ResponseWriter, r *http.Request) {
@@ -319,7 +334,7 @@ func (h *HttpServer) doAddHost(w http.ResponseWriter, r *http.Request) {
 		w.Write(ret.Marshal())
 		return
 	}
-	
+
 	if err = h.Ctx.State.ProxyMap.AddProxy(req.Pattern, req.Host); err != nil {
 		w.Write(Error(500, err.Error()).Marshal())
 		return
@@ -437,12 +452,12 @@ func (h *HttpServer) doRemoveHost(w http.ResponseWriter, r *http.Request) {
 		w.Write(ret.Marshal())
 		return
 	}
-	
+
 	if err = h.Ctx.State.ProxyMap.RemoveHost(req.Pattern, req.Host); err != nil {
 		w.Write(Error(500, err.Error()).Marshal())
 		return
 	}
-	
+
 	if err = h.Ctx.writeLogEntry(5, data); err != nil {
 		errMsg := fmt.Sprintf("can't apply log entry: %s", err.Error())
 		logger.Warn(errMsg)
@@ -452,6 +467,43 @@ func (h *HttpServer) doRemoveHost(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write(Ok().Marshal())
 	return
+}
+
+func (h *HttpServer) doGetBalancerMode(w http.ResponseWriter, r *http.Request) {
+	typies := balancer.GetBalancerType()
+	w.Write(Ok().Put("mode", typies).Marshal())
+}
+
+func (h *HttpServer) doChangeLb(w http.ResponseWriter, r *http.Request) {
+	type ReqData struct {
+		Prefix string `json:"prefix"`
+		Lb     string `json:"lb"`
+	}
+	var req ReqData
+	if err := jsoniter.NewDecoder(r.Body).Decode(&req); err != nil {
+		r.Body.Close()
+		errMsg := fmt.Sprintf("can't receive the json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+
+	_, err := jsoniter.Marshal(req)
+	if err != nil {
+		errMsg := fmt.Sprintf("can't resolve json data: %s", err.Error())
+		logger.Warn(errMsg)
+		ret := Error(500, errMsg)
+		w.Write(ret.Marshal())
+		return
+	}
+
+	err = h.Ctx.State.ProxyMap.Relations[req.Prefix].ChangeLb(req.Lb)
+	if err != nil {
+		w.Write(Error(500, err.Error()).Marshal())
+		return
+	}
+	w.Write(Ok().Marshal())
 }
 
 func (h *HttpServer) checkWritePermission() bool {

@@ -212,3 +212,17 @@ func (httpProxy *HTTPProxy) shutDownCheck() {
 		}
 	}
 }
+
+func (httpProxy *HTTPProxy) ChangeLb(mode string) error {
+	hosts := make([]string, 0)
+	for k := range httpProxy.HostMap {
+		hosts = append(hosts, k)
+	}
+	lb, err := balancer.Build(balancer.Algorithm(mode), hosts)
+	if err != nil {
+		logger.Warnf("can't create load balancer")
+		return err
+	}
+	httpProxy.Lb = lb
+	return nil
+}
